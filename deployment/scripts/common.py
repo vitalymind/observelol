@@ -2,9 +2,9 @@ import os
 import shutil
 import subprocess
 import sys
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
-load_dotenv()
+load_dotenv(find_dotenv(".env"))
 
 GCLOUD = shutil.which("gcloud") or "gcloud"
 
@@ -14,7 +14,10 @@ def run_cmd(
 ) -> subprocess.CompletedProcess:
     """Run a gcloud command. Captures output by default, or streams live if capture_output=False."""
     return subprocess.run(
-        [GCLOUD, *args], capture_output=capture_output, text=True, check=check
+        [GCLOUD, "--quiet", *args],
+        capture_output=capture_output,
+        text=True,
+        check=check,
     )
 
 

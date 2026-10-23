@@ -42,5 +42,19 @@ else:
         sys.exit(1)
 
 print(f"Ensuring versioning is enabled on '{bucket_url}'...")
-run_cmd(["storage", "buckets", "update", bucket_url, "--versioning"])
-print("✅ Bucket versioning enabled.")
+update_res = run_cmd(
+    [
+        "storage",
+        "buckets",
+        "update",
+        bucket_url,
+        f"--project={PROJECT_ID}",
+        "--versioning",
+    ],
+    check=False,
+)
+if update_res.returncode == 0:
+    print("✅ Bucket versioning enabled.")
+else:
+    print(f"❌ Failed to enable bucket versioning: {update_res.stderr}")
+    sys.exit(1)
