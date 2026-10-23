@@ -15,7 +15,7 @@ Rust dispatcher doing following:
 ## Redis (VM1)
 Stores events (RPUSH) and manages Consumer Groups of workers.
 
-## Workers (VM2)
+## Workers (VM3)
 Stateless containers running Rust apps with following functionlaity
 - Register with Redis (XREADGROUP) to wait for ready_games BLOCKING
 - Grab (lrange) all events for a game
@@ -31,5 +31,8 @@ Workers might get empty list of events (duplicated end game event), in wich case
 ## PostgreSQL (VM2)
 Postgre is running in own container on VM2
 
-## React + Next.js app
+## React + Next.js app (VM2)
 Nodejs with Nextjs `control` running in container on VM2, its job is to process admin requests (react + next.js), keep track of replay files, periodically bundle replay files into CDN. `control` does not handle significant traffic and serves as control plane for administrator users. `control` writes to Redis when item/hero snapshot changes.
+
+## OpenTelemetry + lgtm stack (VM2)
+otel-lgtm container stream telemetry data, grafana is accessible via gcloud CLI.

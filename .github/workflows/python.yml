@@ -1,7 +1,14 @@
 name: Python Checks
 
 on:
-  workflow_call:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '**/*.py'
+
+concurrency:
+  group: python-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check-syntax:
@@ -14,7 +21,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Recursively check Python syntax
         shell: python
