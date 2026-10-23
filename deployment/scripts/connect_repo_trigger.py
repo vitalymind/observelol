@@ -268,7 +268,7 @@ else:
             f"--project={PROJECT_ID}",
             f"--repository={repo_resource}",
             f"--service-account={build_sa_resource}",
-            "--branch-pattern=^^^^main$",
+            "--branch-pattern=\Amain\z",
             "--build-config=cloudbuild.yaml",
         ]
     )
