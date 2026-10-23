@@ -1,47 +1,27 @@
 import json
-import os
-import shutil
-import subprocess
 import sys
-from dotenv import load_dotenv
 
-load_dotenv()
+from common import require_env, run_cmd
 
-PROJECT_ID = os.getenv("GCP_PROJECT_ID")
-PROJECT_NUMBER = os.getenv("GCP_PROJECT_NUMBER")
-REGION = os.getenv("GCP_REGION")
-GITHUB_OWNER = os.getenv("GITHUB_OWNER")
-GITHUB_REPO = os.getenv("GITHUB_REPO")
-
-CONNECTION_NAME = os.getenv("GCP_CONNECTION_NAME")
-TRIGGER_NAME = os.getenv("GCP_TRIGGER_NAME")
-BUILD_SA_NAME = os.getenv("GCP_BUILD_SA_NAME")
-
-missing = [
-    name
-    for name, val in [
-        ("GCP_PROJECT_ID", PROJECT_ID),
-        ("GCP_PROJECT_NUMBER", PROJECT_NUMBER),
-        ("GCP_REGION", REGION),
-        ("GITHUB_OWNER", GITHUB_OWNER),
-        ("GITHUB_REPO", GITHUB_REPO),
-        ("GCP_CONNECTION_NAME", CONNECTION_NAME),
-        ("GCP_TRIGGER_NAME", TRIGGER_NAME),
-        ("GCP_BUILD_SA_NAME", BUILD_SA_NAME),
-    ]
-    if not val
-]
-
-if missing:
-    print(f"❌ Missing required environment variables: {', '.join(missing)}")
-    sys.exit(1)
-
-GCLOUD = shutil.which("gcloud") or "gcloud"
-
-
-def run_cmd(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
-    return subprocess.run([GCLOUD, *args], capture_output=True, text=True, check=check)
-
+(
+    PROJECT_ID,
+    PROJECT_NUMBER,
+    REGION,
+    GITHUB_OWNER,
+    GITHUB_REPO,
+    CONNECTION_NAME,
+    TRIGGER_NAME,
+    BUILD_SA_NAME,
+) = require_env(
+    "GCP_PROJECT_ID",
+    "GCP_PROJECT_NUMBER",
+    "GCP_REGION",
+    "GITHUB_OWNER",
+    "GITHUB_REPO",
+    "GCP_CONNECTION_NAME",
+    "GCP_TRIGGER_NAME",
+    "GCP_BUILD_SA_NAME",
+)
 
 service_agent = f"service-{PROJECT_NUMBER}@gcp-sa-cloudbuild.iam.gserviceaccount.com"
 build_sa_email = f"{BUILD_SA_NAME}@{PROJECT_ID}.iam.gserviceaccount.com"
@@ -87,9 +67,8 @@ else:
     try:
         if not conn_exists:
             print(f"Creating connection '{CONNECTION_NAME}' in region '{REGION}'...")
-            create_proc = subprocess.run(
+            create_proc = run_cmd(
                 [
-                    GCLOUD,
                     "builds",
                     "connections",
                     "create",
@@ -97,8 +76,11 @@ else:
                     CONNECTION_NAME,
                     f"--region={REGION}",
                     f"--project={PROJECT_ID}",
-                ]
+                ],
+                check=False,
+                capture_output=False,
             )
+
             if create_proc.returncode != 0:
                 print("❌ Failed to initiate connection creation.")
                 sys.exit(1)
@@ -209,9 +191,8 @@ if check_repo.returncode == 0:
 else:
     remote_uri = f"https://github.com/{GITHUB_OWNER}/{GITHUB_REPO}.git"
     print(f"Linking remote repository: {remote_uri}...")
-    link_proc = subprocess.run(
+    link_proc = run_cmd(
         [
-            GCLOUD,
             "builds",
             "repositories",
             "create",
@@ -220,7 +201,9 @@ else:
             f"--region={REGION}",
             f"--project={PROJECT_ID}",
             f"--remote-uri={remote_uri}",
-        ]
+        ],
+        check=False,
+        capture_output=False,
     )
     if link_proc.returncode == 0:
         print(f"✅ Successfully linked repository '{GITHUB_REPO}'.")
@@ -256,9 +239,8 @@ else:
         f"Creating trigger '{TRIGGER_NAME}' with Service Account '{build_sa_email}'..."
     )
     # Note: 4 carets (^^^^) survive the 2 passes of Windows cmd.exe inside gcloud.cmd as a single ^
-    trig_proc = subprocess.run(
+    trig_proc = run_cmd(
         [
-            GCLOUD,
             "builds",
             "triggers",
             "create",
@@ -268,9 +250,11 @@ else:
             f"--project={PROJECT_ID}",
             f"--repository={repo_resource}",
             f"--service-account={build_sa_resource}",
-            "--branch-pattern=\Amain\z",
+            r"--branch-pattern=\Amain\z",
             "--build-config=cloudbuild.yaml",
-        ]
+        ],
+        check=False,
+        capture_output=False,
     )
     if trig_proc.returncode == 0:
         print(
