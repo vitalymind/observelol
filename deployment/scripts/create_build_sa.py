@@ -1,28 +1,14 @@
-import os
-import shutil
-import subprocess
 import sys
-from dotenv import load_dotenv
 
-load_dotenv()
+from common import require_env, run_cmd
 
-PROJECT_ID = os.getenv("GCP_PROJECT_ID")
-BUILD_SA_NAME = os.getenv("GCP_BUILD_SA_NAME")
-
-if not PROJECT_ID:
-    print("❌ Missing required environment variable: GCP_PROJECT_ID")
-    sys.exit(1)
-
-if not BUILD_SA_NAME:
-    print("❌ Missing required environment variable: GCP_BUILD_SA_NAME")
-    sys.exit(1)
-
-GCLOUD = shutil.which("gcloud") or "gcloud"
-
-
-def run_cmd(args: list[str], check: bool = True) -> subprocess.CompletedProcess:
-    return subprocess.run([GCLOUD, *args], capture_output=True, text=True, check=check)
-
+(
+    PROJECT_ID,
+    BUILD_SA_NAME,
+) = require_env(
+    "GCP_PROJECT_ID",
+    "GCP_BUILD_SA_NAME",
+)
 
 print(f"--- Setting up Build Service Account ({BUILD_SA_NAME}) ---")
 build_sa_email = f"{BUILD_SA_NAME}@{PROJECT_ID}.iam.gserviceaccount.com"
