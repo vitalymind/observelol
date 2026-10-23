@@ -5,3 +5,4 @@
 	- GCP APIs enabling
 	- cloud builder account creation
 	- creating webhook GCP-to-GitHub
+	- Moved from cloud build trigger to github actions (OIDC/WIF)
