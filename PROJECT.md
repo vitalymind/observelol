@@ -13,7 +13,7 @@ Pet project to learn full-stack, DevOps, IaC and simulated load. This applicatio
 - **Cloud infra:** `GCP`
 - **CDN:** `BunnyCDN`
 - **Load simulation:** `Locust`
-- **Backups:** `GCS`
+- **Backups:** `not yet decided`
 
 ## Project goals
 
@@ -31,9 +31,6 @@ Project must have proper IaC deployment configuration and be deployed in real en
 
 ### Professional monitoring tool
 Project must utilise professional monitoring tools to detect server load and alert administor on failers
-
-### Temper proof WORM long term backups
-Project must periodically store database into long-term write-once read-many offsite storage
 
 ## Project description
 OberveLoL (League of Legends Observer) is an app that serve dual purpose:

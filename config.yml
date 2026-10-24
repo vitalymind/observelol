@@ -23,3 +23,32 @@ GCP_WORKLOAD_IDENTITY_POOL: github-pool
 GCP_WORKLOAD_IDENTITY_PROVIDER: github-provider
 GCP_DEPLOY_SA_NAME: github-deployer
 GCP_VM_SA_NAME: worker-service
+
+# Infrastructure definitions
+infra_definitions:
+  zone: a
+  ingest_vm:
+    name: "ingest"
+    type: e2-small
+    image: cos-cloud/cos-stable
+    boot_disk:
+      size: 10
+      type: pd-balanced
+  worker_vm:
+    name: "worker"
+    type: e2-small
+    image: cos-cloud/cos-stable
+    boot_disk:
+      size: 10
+      type: pd-balanced
+  control_vm:
+    name: "control"
+    type: e2-small
+    image: cos-cloud/cos-stable
+    boot_disk:
+      size: 10
+      type: pd-balanced
+    attached_disc:
+      name: db-storage
+      size: 20
+      type: pd-ssd

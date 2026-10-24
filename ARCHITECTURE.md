@@ -31,8 +31,14 @@ Workers might get empty list of events (duplicated end game event), in wich case
 ## PostgreSQL (VM2)
 Postgre is running in own container on VM2
 
+## Backups
+It is yet to be decided what backup strategy to use Logical Backups or Physical + Continuous WAL.
+
+## Persistent detachable disc (Connected to VM2)
+Contains DB and other files maintained by `control`
+
 ## React + Next.js app (VM2)
 Nodejs with Nextjs `control` running in container on VM2, its job is to process admin requests (react + next.js), keep track of replay files, periodically bundle replay files into CDN. `control` does not handle significant traffic and serves as control plane for administrator users. `control` writes to Redis when item/hero snapshot changes.
 
 ## OpenTelemetry + lgtm stack (VM2)
-otel-lgtm container stream telemetry data, grafana is accessible via gcloud CLI.
+otel-lgtm container stream telemetry data, grafana is accessible via gcloud CLI (gCloud tunnel).
