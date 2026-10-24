@@ -1,8 +1,11 @@
 import os
+from pathlib import Path
 import shutil
 import subprocess
 import sys
 from dotenv import find_dotenv, load_dotenv
+import yaml
+from typing import Any
 
 load_dotenv(find_dotenv(".env"))
 
@@ -21,16 +24,20 @@ def run_cmd(
     )
 
 
-def require_env(*names: str):
-    """Validate required environment variables and return them for unpacking.
+def load_config(names: list[str], config_path: str = "config.yml"):
+    file = Path("./", config_path).resolve()
 
-    Exits with code 1 if any are missing.
-    Returns a single string if 1 name is provided, or a tuple of strings if multiple.
-    """
-    missing = [name for name in names if not os.getenv(name)]
-    if missing:
-        print(f"❌ Missing required environment variables: {', '.join(missing)}")
+    if not file.exists():
+        print(f"❌ Config file not found: {file}")
         sys.exit(1)
 
-    values = [os.environ[name] for name in names]
+    with open(file, "r") as f:
+        config = yaml.safe_load(f) or {}
+
+    missing = [name for name in names if name not in config or config[name] is None]
+    if missing:
+        print(f"❌ Missing required configuration variables: {', '.join(missing)}")
+        sys.exit(1)
+
+    values = [config[name] for name in names]
     return values[0] if len(values) == 1 else tuple(values)

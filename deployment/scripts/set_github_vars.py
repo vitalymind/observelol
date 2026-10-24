@@ -1,9 +1,7 @@
-# Sets repository variables in GitHub Actions using GitHub CLI ('gh')
-
 import shutil
 import subprocess
 import sys
-from common import require_env
+from common import load_config
 
 (
     PROJECT_ID,
@@ -13,14 +11,16 @@ from common import require_env
     POOL_ID,
     PROVIDER_ID,
     DEPLOY_SA_NAME,
-) = require_env(
-    "GCP_PROJECT_ID",
-    "GCP_PROJECT_NUMBER",
-    "GITHUB_OWNER",
-    "GITHUB_REPO",
-    "GCP_WORKLOAD_IDENTITY_POOL",
-    "GCP_WORKLOAD_IDENTITY_PROVIDER",
-    "GCP_DEPLOY_SA_NAME",
+) = load_config(
+    [
+        "GCP_PROJECT_ID",
+        "GCP_PROJECT_NUMBER",
+        "GITHUB_OWNER",
+        "GITHUB_REPO",
+        "GCP_WORKLOAD_IDENTITY_POOL",
+        "GCP_WORKLOAD_IDENTITY_PROVIDER",
+        "GCP_DEPLOY_SA_NAME",
+    ]
 )
 
 repo_name = f"{GITHUB_OWNER}/{GITHUB_REPO}"
