@@ -9,7 +9,7 @@ terraform {
   }
 
   backend "gcs" {
-    bucket = local.infra.state_bucket
+    bucket = local.state_bucket
     prefix = "terraform/state"
   }
 }
