@@ -1,9 +1,9 @@
 # Persistent detachable disk for VM2 (PostgreSQL data and control plane files)
 resource "google_compute_disk" "vm2_data" {
   name = local.infra.control_vm.attached_disk.name
-  type = local.infra.control_vm.disc.type
+  type = local.infra.control_vm.disk.type
   zone = local.zone
-  size = local.infra.control_vm.disc.size
+  size = local.infra.control_vm.disk.size
 }
 
 # VM1: Ingestion (Nginx + Rust Dispatcher + Redis)
