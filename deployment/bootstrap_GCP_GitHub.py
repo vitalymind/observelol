@@ -10,7 +10,6 @@ scripts = [
     BASE_DIR / "scripts" / "create_vm_sa.py",
     BASE_DIR / "scripts" / "create_bucket.py",
     BASE_DIR / "scripts" / "setup_workload_identity.py",
-    BASE_DIR / "scripts" / "set_github_vars.py",
 ]
 
 for script in scripts:
