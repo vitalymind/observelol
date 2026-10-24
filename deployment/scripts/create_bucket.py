@@ -1,14 +1,12 @@
 import sys
-from common import require_env, run_cmd
+from common import run_cmd, load_config
 
 (
     PROJECT_ID,
     REGION,
     BUCKET_NAME,
-) = require_env(
-    "GCP_PROJECT_ID",
-    "GCP_REGION",
-    "GCP_STATE_BUCKET_NAME",
+) = load_config(
+    ["GCP_PROJECT_ID", "GCP_REGION", "GCP_STATE_BUCKET_NAME"],
 )
 
 print(f"--- Setting up OpenTofu State Bucket: gs://{BUCKET_NAME} ---")

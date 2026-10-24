@@ -1,0 +1,52 @@
+name: Infrastructure Plan
+
+on:
+  pull_request:
+    paths:
+      - 'deployment/infra/**'
+      - 'config.yml'
+
+concurrency:
+  group: infra-plan-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: deployment/infra
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Load configuration from config.yml
+        uses: ./.github/actions/load-infra-config
+
+      - name: Authenticate to Google Cloud (OIDC)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up OpenTofu
+        uses: opentofu/setup-opentofu@v1
+        with:
+          tofu_version: "1.13"
+
+      - name: Check formatting
+        run: tofu fmt -check
+
+      - name: Initialize OpenTofu (GCS Backend)
+        run: tofu init
+
+      - name: Validate configuration
+        run: tofu validate
+
+      - name: Generate execution plan
+        run: tofu plan

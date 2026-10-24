@@ -7,9 +7,9 @@ BASE_DIR = Path(__file__).resolve().parent
 scripts = [
     BASE_DIR / "scripts" / "enable_apis.py",
     BASE_DIR / "scripts" / "create_deploy_sa.py",
+    BASE_DIR / "scripts" / "create_vm_sa.py",
     BASE_DIR / "scripts" / "create_bucket.py",
     BASE_DIR / "scripts" / "setup_workload_identity.py",
-    BASE_DIR / "scripts" / "set_github_vars.py",
 ]
 
 for script in scripts:

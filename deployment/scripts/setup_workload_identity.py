@@ -1,5 +1,5 @@
 import sys
-from common import require_env, run_cmd
+from common import load_config, run_cmd
 
 (
     PROJECT_ID,
@@ -9,14 +9,16 @@ from common import require_env, run_cmd
     POOL_ID,
     PROVIDER_ID,
     DEPLOY_SA_NAME,
-) = require_env(
-    "GCP_PROJECT_ID",
-    "GCP_PROJECT_NUMBER",
-    "GITHUB_OWNER",
-    "GITHUB_REPO",
-    "GCP_WORKLOAD_IDENTITY_POOL",
-    "GCP_WORKLOAD_IDENTITY_PROVIDER",
-    "GCP_DEPLOY_SA_NAME",
+) = load_config(
+    [
+        "GCP_PROJECT_ID",
+        "GCP_PROJECT_NUMBER",
+        "GITHUB_OWNER",
+        "GITHUB_REPO",
+        "GCP_WORKLOAD_IDENTITY_POOL",
+        "GCP_WORKLOAD_IDENTITY_PROVIDER",
+        "GCP_DEPLOY_SA_NAME",
+    ]
 )
 
 deploy_sa_email = f"{DEPLOY_SA_NAME}@{PROJECT_ID}.iam.gserviceaccount.com"

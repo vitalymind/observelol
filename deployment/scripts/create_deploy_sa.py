@@ -1,14 +1,11 @@
 import sys
 import time
-from common import require_env, run_cmd
+from common import load_config, run_cmd
 
 (
     PROJECT_ID,
     DEPLOY_SA_NAME,
-) = require_env(
-    "GCP_PROJECT_ID",
-    "GCP_DEPLOY_SA_NAME",
-)
+) = load_config(["GCP_PROJECT_ID", "GCP_DEPLOY_SA_NAME"])
 
 print(f"--- Setting up GitHub Deployer Service Account ({DEPLOY_SA_NAME}) ---")
 deploy_sa_email = f"{DEPLOY_SA_NAME}@{PROJECT_ID}.iam.gserviceaccount.com"
