@@ -41,7 +41,7 @@ resource "google_compute_instance" "vm1_ingest" {
     })
   }
 
-  desired_status						 = "RUNNING"
+  desired_status            = "RUNNING"
   allow_stopping_for_update = true
 }
 
@@ -75,7 +75,7 @@ resource "google_compute_instance" "vm2_control" {
     scopes = ["cloud-platform"]
   }
 
-  desired_status 						= "RUNNING"
+  desired_status            = "RUNNING"
   allow_stopping_for_update = true
 }
 
@@ -102,7 +102,7 @@ resource "google_compute_instance" "vm3_worker" {
     email  = "${local.vm_sa_name}@${local.project_id}.iam.gserviceaccount.com"
     scopes = ["cloud-platform"]
   }
-  
-  desired_status 						= "RUNNING"
+
+  desired_status            = "RUNNING"
   allow_stopping_for_update = true
 }
