@@ -91,4 +91,4 @@ runs:
         gcloud compute ssh "${VM_NAME}" \
           --zone="${REGION}-${ZONE}" \
           --tunnel-through-iap \
-          --command="sudo mkdir -p /var/lib/observelol && sudo cp -r /tmp/observelol/. /var/lib/observelol/ && sudo rm -rf /tmp/observelol && sudo systemctl start observelol.service"
+          --command="sudo mkdir -p /var/lib/observelol && sudo cp -r /tmp/observelol/. /var/lib/observelol/ && sudo rm -rf /tmp/observelol && sudo systemctl restart observelol.service"

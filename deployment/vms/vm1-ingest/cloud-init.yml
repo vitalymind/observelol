@@ -12,16 +12,22 @@ write_files:
 
       [Service]
       Type=oneshot
+      RemainAfterExit=yes
       WorkingDirectory=/var/lib/observelol
-      # 1. Configure Artifact Registry auth (stored in volatile /root/.docker on COS)
+      Environment="HOME=/home/chronos"
+      # 1. Configure Artifact Registry auth for host Docker daemon
       ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries=${region}-docker.pkg.dev
-      # 2. Run docker compose via official docker:cli image (since COS has no host docker-compose binary)
+      # 2. Pull Dispatcher image using host Docker CLI (which has docker-credential-gcr)
+      ExecStartPre=-/bin/sh -c 'set -a; [ -f /var/lib/observelol/.env ] && . /var/lib/observelol/.env; set +a; [ -n "$$DISPATCHER_IMAGE" ] && /usr/bin/docker pull "$$DISPATCHER_IMAGE"'
+      # 3. Run docker compose via official docker:cli image
       ExecStart=/usr/bin/docker run --rm \
         -v /var/run/docker.sock:/var/run/docker.sock \
-        -v /root/.docker:/root/.docker:ro \
         -v /var/lib/observelol:/var/lib/observelol \
         -w /var/lib/observelol \
-        docker:cli compose up -d --pull always --remove-orphans
+        docker:cli compose up -d --remove-orphans
+
+      [Install]
+      WantedBy=multi-user.target
 
 runcmd:
   - mkdir -p /var/lib/observelol
