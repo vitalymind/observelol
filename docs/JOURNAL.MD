@@ -26,3 +26,5 @@
 - Added letEncrypt bootstrap script, save cert to GCS
 - Fixed bunch of problems with deployment
 - Created proper smoke test using real VM test deployment
+- Introduced payload schema validation (axum + serde)
+- Optimized data saved to redis

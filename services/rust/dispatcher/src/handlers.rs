@@ -82,23 +82,23 @@ async fn handle_event(
     State(state): State<AppState>,
     Json(incoming): Json<IncomingEvent>,
 ) -> impl IntoResponse {
-    // We check if event payload matches event type
-		if !incoming.is_valid_payload() {
-        state
-            .metrics
-            .errors_total
-            .add(1, &[KeyValue::new("stage", "invalid_payload")]);
-        return StatusCode::BAD_REQUEST;
-    }
-
     let game_id = incoming.game_id;
     let event_type = incoming.event_type;
-    let stored = StoredEvent::from(incoming);
-
-    let serialized = match serde_json::to_string(&stored) {
+    let stored = match StoredEvent::try_from(incoming) {
         Ok(s) => s,
+        Err(_) => {
+            state
+                .metrics
+                .errors_total
+                .add(1, &[KeyValue::new("stage", "invalid_payload")]);
+            return StatusCode::BAD_REQUEST;
+        }
+    };
+
+    let encoded = match postcard::to_allocvec(&stored) {
+        Ok(bytes) => bytes,
         Err(err) => {
-            error!(error = %err, %game_id, "Failed to serialize StoredEvent");
+            error!(error = %err, %game_id, "Failed to serialize StoredEvent with postcard");
             state
                 .metrics
                 .errors_total
@@ -114,7 +114,7 @@ async fn handle_event(
     let res: redis::RedisResult<i64> = state
         .ingest_script
         .key(&key)
-        .arg(&serialized)
+        .arg(&encoded)
         .arg(state.config.redis_event_ttl_sec)
         .invoke_async(&mut conn)
         .await;

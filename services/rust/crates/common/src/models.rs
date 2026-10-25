@@ -99,22 +99,121 @@ impl IncomingEvent {
 }
 
 /// Event structure stored in Redis (`game:{game_id}:events`) after stripping `game_id`.
+/// Flat binary enum variant for zero-overhead postcard serialization and direct pattern matching.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct StoredEvent {
-    pub timestamp_ms: u32,
-    pub event_index: u32,
-    pub event_type: EventType,
-    #[serde(default)]
-    pub payload: EventPayload,
+pub enum StoredEvent {
+    GameStarted {
+        timestamp_ms: u32,
+        event_index: u32,
+        started_at: u64,
+    },
+    HeroSelected {
+        timestamp_ms: u32,
+        event_index: u32,
+        slot: u8,
+        hero_id: u32,
+        version_id: u32,
+    },
+    RoundStart {
+        timestamp_ms: u32,
+        event_index: u32,
+    },
+    ItemBought {
+        timestamp_ms: u32,
+        event_index: u32,
+        slot: u8,
+        item_id: u32,
+        version_id: u32,
+    },
+    Kill {
+        timestamp_ms: u32,
+        event_index: u32,
+        killer_slot: u8,
+        victim_slot: u8,
+    },
+    LevelUp {
+        timestamp_ms: u32,
+        event_index: u32,
+        slot: u8,
+        level: u8,
+    },
+    GameEnds {
+        timestamp_ms: u32,
+        event_index: u32,
+    },
 }
 
-impl From<IncomingEvent> for StoredEvent {
-    fn from(event: IncomingEvent) -> Self {
-        Self {
-            timestamp_ms: event.timestamp_ms,
-            event_index: event.event_index,
-            event_type: event.event_type,
-            payload: event.payload,
+impl StoredEvent {
+    pub fn event_index(&self) -> u32 {
+        match self {
+            Self::GameStarted { event_index, .. }
+            | Self::HeroSelected { event_index, .. }
+            | Self::RoundStart { event_index, .. }
+            | Self::ItemBought { event_index, .. }
+            | Self::Kill { event_index, .. }
+            | Self::LevelUp { event_index, .. }
+            | Self::GameEnds { event_index, .. } => *event_index,
+        }
+    }
+
+    pub fn timestamp_ms(&self) -> u32 {
+        match self {
+            Self::GameStarted { timestamp_ms, .. }
+            | Self::HeroSelected { timestamp_ms, .. }
+            | Self::RoundStart { timestamp_ms, .. }
+            | Self::ItemBought { timestamp_ms, .. }
+            | Self::Kill { timestamp_ms, .. }
+            | Self::LevelUp { timestamp_ms, .. }
+            | Self::GameEnds { timestamp_ms, .. } => *timestamp_ms,
+        }
+    }
+}
+
+impl TryFrom<IncomingEvent> for StoredEvent {
+    type Error = &'static str;
+
+    fn try_from(event: IncomingEvent) -> Result<Self, Self::Error> {
+        match (event.event_type, event.payload) {
+            (EventType::GameStarted, EventPayload::GameStarted(p)) => Ok(StoredEvent::GameStarted {
+                timestamp_ms: event.timestamp_ms,
+                event_index: event.event_index,
+                started_at: p.started_at,
+            }),
+            (EventType::HeroSelected, EventPayload::HeroSelected(p)) => Ok(StoredEvent::HeroSelected {
+                timestamp_ms: event.timestamp_ms,
+                event_index: event.event_index,
+                slot: p.slot,
+                hero_id: p.hero_id,
+                version_id: p.version_id,
+            }),
+            (EventType::RoundStart, EventPayload::Empty(_)) => Ok(StoredEvent::RoundStart {
+                timestamp_ms: event.timestamp_ms,
+                event_index: event.event_index,
+            }),
+            (EventType::ItemBought, EventPayload::ItemBought(p)) => Ok(StoredEvent::ItemBought {
+                timestamp_ms: event.timestamp_ms,
+                event_index: event.event_index,
+                slot: p.slot,
+                item_id: p.item_id,
+                version_id: p.version_id,
+            }),
+            (EventType::Kill, EventPayload::Kill(p)) => Ok(StoredEvent::Kill {
+                timestamp_ms: event.timestamp_ms,
+                event_index: event.event_index,
+                killer_slot: p.killer_slot,
+                victim_slot: p.victim_slot,
+            }),
+            (EventType::LevelUp, EventPayload::LevelUp(p)) => Ok(StoredEvent::LevelUp {
+                timestamp_ms: event.timestamp_ms,
+                event_index: event.event_index,
+                slot: p.slot,
+                level: p.level,
+            }),
+            (EventType::GameEnds, EventPayload::Empty(_)) => Ok(StoredEvent::GameEnds {
+                timestamp_ms: event.timestamp_ms,
+                event_index: event.event_index,
+            }),
+            _ => Err("Mismatched event type and payload"),
         }
     }
 }
@@ -132,7 +231,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn incoming_event_strips_game_id_and_preserves_u8_type() {
+    fn incoming_event_strips_game_id_and_converts_to_postcard() {
         let game_id = Uuid::now_v7();
         let raw_json = json!({
             "game_id": game_id,
@@ -150,12 +249,13 @@ mod tests {
         assert_eq!(incoming.event_type, EventType::HeroSelected);
         assert!(incoming.is_valid_payload());
 
-        let stored = StoredEvent::from(incoming);
-        let serialized = serde_json::to_value(&stored).unwrap();
+        let stored = StoredEvent::try_from(incoming).unwrap();
+        assert_eq!(stored.event_index(), 2);
+        assert_eq!(stored.timestamp_ms(), 1500);
 
-        assert!(serialized.get("game_id").is_none());
-        assert_eq!(serialized["event_type"], json!(2));
-        assert_eq!(serialized["event_index"], json!(2));
+        let binary = postcard::to_allocvec(&stored).unwrap();
+        let decoded: StoredEvent = postcard::from_bytes(&binary).unwrap();
+        assert_eq!(stored, decoded);
     }
 
     #[test]
