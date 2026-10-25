@@ -10,6 +10,7 @@ scripts = [
     BASE_DIR / "create_vm_sa.py",
     BASE_DIR / "create_bucket.py",
     BASE_DIR / "setup_workload_identity.py",
+    BASE_DIR / "create_tls_cert.py",
 ]
 
 for script in scripts:

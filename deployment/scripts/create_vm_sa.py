@@ -46,6 +46,7 @@ else:
 # 2. Assign runtime IAM roles to the VM Service Account (with retry for IAM propagation)
 ROLES = [
     "roles/artifactregistry.reader",
+    "roles/storage.objectViewer",
     "roles/logging.logWriter",
     "roles/monitoring.metricWriter",
 ]
