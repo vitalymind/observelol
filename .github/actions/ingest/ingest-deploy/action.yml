@@ -51,23 +51,6 @@ runs:
         docker push "${{ inputs.artifact_registry_url }}/dispatcher:${GITHUB_SHA}"
         docker push "${{ inputs.artifact_registry_url }}/dispatcher:latest"
 
-    - name: Wait for VM1 SSH and cloud-init to be ready
-      shell: bash
-      run: |
-        for i in {1..24}; do
-          if gcloud compute ssh "${VM_NAME}" \
-            --zone="${REGION}-${ZONE}" \
-            --tunnel-through-iap \
-            --quiet \
-            --command="cloud-init status --wait && mkdir -p /tmp/observelol"; then
-            exit 0
-          fi
-          echo "Waiting for VM1 SSH / cloud-init... ($i/24)"
-          sleep 5
-        done
-        echo "Error: VM1 did not become ready in time."
-        exit 1
-
     - name: Render .env on runner
       uses: ./.github/actions/helpers/render-env
       with:
