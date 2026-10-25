@@ -6,9 +6,11 @@ mod telemetry;
 
 use std::sync::Arc;
 
+use dashmap::DashMap;
+
 use crate::{
     config::DispatcherConfig,
-    handlers::{AppState, build_router},
+    handlers::{AppState, build_router, spawn_reaper},
     redis::RedisStorage,
     server::serve_unix_socket,
     telemetry::{DispatcherMetrics, init_telemetry},
@@ -27,7 +29,10 @@ async fn main() {
         storage,
         config: config.clone(),
         metrics: Arc::new(DispatcherMetrics::new()),
+        activity: Arc::new(DashMap::with_capacity(16_384)),
     };
+
+    spawn_reaper(state.clone());
 
     let app = build_router(state);
     serve_unix_socket(app, &config.socket_path).await;

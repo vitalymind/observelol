@@ -1,33 +1,22 @@
-use std::sync::Arc;
 use common::{
     ACTIVE_SNAPSHOT_KEY, READY_GAMES_STREAM, WORKERS_CONSUMER_GROUP,
     game_events_key,
 };
-use redis::{AsyncCommands, Script, aio::ConnectionManager};
+use redis::{AsyncCommands, aio::ConnectionManager};
 use tracing::info;
 use uuid::Uuid;
 
-/// Lua script for atomic event ingestion:
-/// Appends serialized event to `game:{id}:events` and sets safety TTL only on the first event.
-pub const INGEST_EVENT_LUA: &str = r#"
-local len = redis.call('RPUSH', KEYS[1], ARGV[1])
-if len == 1 then
-    redis.call('EXPIRE', KEYS[1], tonumber(ARGV[2]))
-end
-return len
-"#;
-
 pub trait Storage: Clone + Send + Sync + 'static {
     fn get_snapshot(&self) -> impl std::future::Future<Output = Result<Option<String>, String>> + Send;
-    fn ingest_event(&self, game_id: &Uuid, bytes: &[u8], ttl_sec: u64) -> impl std::future::Future<Output = Result<i64, String>> + Send;
+    fn ingest_event(&self, game_id: &Uuid, bytes: &[u8]) -> impl std::future::Future<Output = Result<i64, String>> + Send;
     fn notify_game_ended(&self, game_id: &Uuid) -> impl std::future::Future<Output = Result<(), String>> + Send;
+    fn unlink_game(&self, game_id: &Uuid) -> impl std::future::Future<Output = Result<(), String>> + Send;
     fn ping(&self) -> impl std::future::Future<Output = Result<(), String>> + Send;
 }
 
 #[derive(Clone)]
 pub struct RedisStorage {
     redis: ConnectionManager,
-    ingest_script: Arc<Script>,
 }
 
 impl RedisStorage {
@@ -36,10 +25,7 @@ impl RedisStorage {
         let mut redis = ConnectionManager::new(client).await?;
         ensure_consumer_group(&mut redis).await;
 
-        Ok(Self {
-            redis,
-            ingest_script: Arc::new(Script::new(INGEST_EVENT_LUA)),
-        })
+        Ok(Self { redis })
     }
 }
 
@@ -51,16 +37,10 @@ impl Storage for RedisStorage {
             .map_err(|e| e.to_string())
     }
 
-    async fn ingest_event(&self, game_id: &Uuid, bytes: &[u8], ttl_sec: u64) -> Result<i64, String> {
+    async fn ingest_event(&self, game_id: &Uuid, bytes: &[u8]) -> Result<i64, String> {
         let key = game_events_key(game_id);
         let mut conn = self.redis.clone();
-        self.ingest_script
-            .key(&key)
-            .arg(bytes)
-            .arg(ttl_sec)
-            .invoke_async(&mut conn)
-            .await
-            .map_err(|e| e.to_string())
+        conn.rpush(key, bytes).await.map_err(|e| e.to_string())
     }
 
     async fn notify_game_ended(&self, game_id: &Uuid) -> Result<(), String> {
@@ -73,6 +53,12 @@ impl Storage for RedisStorage {
             .query_async(&mut conn)
             .await
             .map_err(|e| e.to_string())
+    }
+
+    async fn unlink_game(&self, game_id: &Uuid) -> Result<(), String> {
+        let key = game_events_key(game_id);
+        let mut conn = self.redis.clone();
+        conn.unlink(key).await.map_err(|e| e.to_string())
     }
 
     async fn ping(&self) -> Result<(), String> {

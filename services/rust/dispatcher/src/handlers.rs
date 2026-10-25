@@ -11,6 +11,7 @@ use axum::{
     routing::{get, post},
 };
 use common::{EventType, IncomingEvent, NewGameResponse, StoredEvent};
+use dashmap::DashMap;
 use opentelemetry::KeyValue;
 use tracing::{error, warn};
 use uuid::Uuid;
@@ -26,6 +27,7 @@ pub struct AppState<S: Storage> {
     pub storage: S,
     pub config: DispatcherConfig,
     pub metrics: Arc<DispatcherMetrics>,
+    pub activity: Arc<DashMap<Uuid, Instant>>,
 }
 
 pub fn build_router<S: Storage>(state: AppState<S>) -> Router {
@@ -37,6 +39,44 @@ pub fn build_router<S: Storage>(state: AppState<S>) -> Router {
         )
         .route("/health", get(handle_health::<S>))
         .with_state(state)
+}
+
+pub fn spawn_reaper<S: Storage>(state: AppState<S>) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let check_interval = Duration::from_secs(5);
+        let mut interval = tokio::time::interval(check_interval);
+
+        loop {
+            interval.tick().await;
+
+            let now = Instant::now();
+            let ttl = Duration::from_secs(state.config.redis_event_ttl_sec);
+            let mut expired_games = Vec::new();
+
+            for entry in state.activity.iter() {
+                if now.duration_since(*entry.value()) >= ttl {
+                    expired_games.push(*entry.key());
+                }
+            }
+
+            for game_id in expired_games {
+                if let Some((_, last_seen)) = state.activity.remove(&game_id) {
+                    if now.duration_since(last_seen) >= ttl {
+                        warn!(%game_id, "Reaping abandoned game after inactivity TTL");
+                        if let Err(err) = state.storage.unlink_game(&game_id).await {
+                            warn!(error = %err, %game_id, "Failed to unlink abandoned game from Redis");
+                        }
+                        state
+                            .metrics
+                            .errors_total
+                            .add(1, &[KeyValue::new("stage", "game_inactivity_reaped")]);
+                    } else {
+                        state.activity.insert(game_id, last_seen);
+                    }
+                }
+            }
+        }
+    })
 }
 
 async fn handle_new_game<S: Storage>(State(state): State<AppState<S>>) -> impl IntoResponse {
@@ -107,13 +147,10 @@ async fn handle_event<S: Storage>(
     };
 
     let start = Instant::now();
-    let res = state
-        .storage
-        .ingest_event(&game_id, encoded, state.config.redis_event_ttl_sec)
-        .await;
+    let res = state.storage.ingest_event(&game_id, encoded).await;
     state.metrics.redis_latency_ms.record(
         start.elapsed().as_secs_f64() * 1000.0,
-        &[KeyValue::new("op", "ingest_lua")],
+        &[KeyValue::new("op", "rpush")],
     );
 
     if let Err(err) = res {
@@ -125,18 +162,22 @@ async fn handle_event<S: Storage>(
         return StatusCode::INTERNAL_SERVER_ERROR;
     }
 
-    state.metrics.events_total.add(
-        1,
-        &[KeyValue::new("event_type", event_type.as_str())],
-    );
+    state.activity.insert(game_id, Instant::now());
+
+    state
+        .metrics
+        .events_total
+        .add(1, &[KeyValue::new("event_type", event_type.as_str())]);
 
     if event_type == EventType::GameEnds {
         let storage = state.storage.clone();
         let grace_ms = state.config.game_end_grace_ms;
         let metrics = state.metrics.clone();
+        let activity = state.activity.clone();
 
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(grace_ms)).await;
+            activity.remove(&game_id);
             if let Err(err) = storage.notify_game_ended(&game_id).await {
                 warn!(error = %err, %game_id, "Failed to notify game ended");
                 metrics
@@ -176,6 +217,7 @@ mod tests {
         snapshot: Arc<Mutex<Result<Option<String>, String>>>,
         ingested: Arc<Mutex<Vec<(Uuid, Vec<u8>)>>>,
         game_ended: Arc<Mutex<Vec<Uuid>>>,
+        unlinked: Arc<Mutex<Vec<Uuid>>>,
         should_fail_ping: Arc<Mutex<bool>>,
     }
 
@@ -185,6 +227,7 @@ mod tests {
                 snapshot: Arc::new(Mutex::new(Ok(None))),
                 ingested: Arc::new(Mutex::new(Vec::new())),
                 game_ended: Arc::new(Mutex::new(Vec::new())),
+                unlinked: Arc::new(Mutex::new(Vec::new())),
                 should_fail_ping: Arc::new(Mutex::new(false)),
             }
         }
@@ -195,12 +238,7 @@ mod tests {
             self.snapshot.lock().unwrap().clone()
         }
 
-        async fn ingest_event(
-            &self,
-            game_id: &Uuid,
-            bytes: &[u8],
-            _ttl_sec: u64,
-        ) -> Result<i64, String> {
+        async fn ingest_event(&self, game_id: &Uuid, bytes: &[u8]) -> Result<i64, String> {
             let mut list = self.ingested.lock().unwrap();
             list.push((*game_id, bytes.to_vec()));
             Ok(list.len() as i64)
@@ -208,6 +246,11 @@ mod tests {
 
         async fn notify_game_ended(&self, game_id: &Uuid) -> Result<(), String> {
             self.game_ended.lock().unwrap().push(*game_id);
+            Ok(())
+        }
+
+        async fn unlink_game(&self, game_id: &Uuid) -> Result<(), String> {
+            self.unlinked.lock().unwrap().push(*game_id);
             Ok(())
         }
 
@@ -227,10 +270,11 @@ mod tests {
                 redis_url: "mock://".into(),
                 socket_path: "/tmp/mock.sock".into(),
                 otel_endpoint: "http://mock".into(),
-                redis_event_ttl_sec: 3600,
+                redis_event_ttl_sec: 1, // 1 second for fast test
                 game_end_grace_ms: 10,
             },
             metrics: Arc::new(DispatcherMetrics::new()),
+            activity: Arc::new(DashMap::new()),
         }
     }
 
@@ -274,7 +318,8 @@ mod tests {
     #[tokio::test]
     async fn test_event_valid_hero_selected() {
         let storage = MockStorage::default();
-        let app = build_router(test_state(storage.clone()));
+        let state = test_state(storage.clone());
+        let app = build_router(state.clone());
         let game_id = Uuid::now_v7();
 
         let payload = json!({
@@ -314,6 +359,9 @@ mod tests {
                 version_id: 1,
             }
         );
+
+        // Verify game is registered in the activity tracker
+        assert!(state.activity.contains_key(&game_id));
     }
 
     #[tokio::test]
@@ -351,7 +399,6 @@ mod tests {
         let storage = MockStorage::default();
         let app = build_router(test_state(storage.clone()));
 
-        // Claimed event_type is HeroSelected (2), but payload is Kill
         let payload = json!({
             "game_id": Uuid::now_v7(),
             "timestamp_ms": 100,
@@ -376,10 +423,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_event_game_ends_triggers_notification() {
+    async fn test_event_game_ends_triggers_notification_and_cleans_tracker() {
         let storage = MockStorage::default();
-        let app = build_router(test_state(storage.clone()));
+        let state = test_state(storage.clone());
+        let app = build_router(state.clone());
         let game_id = Uuid::now_v7();
+
+        state.activity.insert(game_id, Instant::now());
 
         let payload = json!({
             "game_id": game_id,
@@ -399,12 +449,39 @@ mod tests {
         let res = app.oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
 
-        // Wait for background grace period task (configured to 10ms in test_state)
         tokio::time::sleep(Duration::from_millis(30)).await;
+
+        // Activity tracker should be cleared after grace period finishes
+        assert!(!state.activity.contains_key(&game_id));
 
         let ended = storage.game_ended.lock().unwrap();
         assert_eq!(ended.len(), 1);
         assert_eq!(ended[0], game_id);
+    }
+
+    #[tokio::test]
+    async fn test_inactivity_reaper_cleans_dead_games() {
+        let storage = MockStorage::default();
+        let state = test_state(storage.clone());
+        let game_id = Uuid::now_v7();
+
+        // Seed with a timestamp in the past (> 1 sec TTL)
+        state
+            .activity
+            .insert(game_id, Instant::now() - Duration::from_secs(5));
+
+        let reaper_handle = spawn_reaper(state.clone());
+
+        // Wait for reaper interval (runs every 5s, let's wait 6s)
+        tokio::time::sleep(Duration::from_millis(6000)).await;
+
+        reaper_handle.abort();
+
+        // Verify the game was unlinked and removed from tracker
+        let unlinked = storage.unlinked.lock().unwrap();
+        assert_eq!(unlinked.len(), 1);
+        assert_eq!(unlinked[0], game_id);
+        assert!(!state.activity.contains_key(&game_id));
     }
 
     #[tokio::test]
@@ -421,7 +498,6 @@ mod tests {
         let res = app.oneshot(req).await.unwrap();
         assert_eq!(res.status(), StatusCode::OK);
 
-        // Simulate storage failure
         *storage.should_fail_ping.lock().unwrap() = true;
 
         let req2 = Request::builder()
