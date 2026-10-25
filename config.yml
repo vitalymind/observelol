@@ -27,6 +27,7 @@ GCP_VM_SA_NAME: worker-service
 # Infrastructure definitions
 infra_definitions:
   zone: a
+  subnet: "observelol-subnet"
   ingest_vm:
     name: "ingest"
     type: e2-small

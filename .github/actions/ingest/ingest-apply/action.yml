@@ -1,0 +1,71 @@
+name: "Ingest Apply"
+description: "Renders .env, downloads certs, copies files to target VM, and restarts observelol.service"
+
+inputs:
+  vm_name:
+    description: "Name of target GCE VM"
+    required: true
+  dispatcher_image:
+    description: "Full Docker image path and tag for Dispatcher"
+    required: true
+  control_host:
+    description: "Control plane host (VM2 IP for prod, 127.0.0.1 for test)"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load config variables
+      uses: ./.github/actions/helpers/load-config
+      with:
+        mappings: |
+          REGION=.GCP_REGION
+          ZONE=.infra_definitions.zone
+          STATE_BUCKET=.GCP_STATE_BUCKET_NAME
+          INGEST_DOMAIN=.ingest_config.domain
+
+    - name: Render .env on runner
+      uses: ./.github/actions/helpers/render-env
+      with:
+        output_file: deployment/vms/vm1-ingest/.env
+        mappings: |
+          REDIS_IMAGE=.container_images.redis
+          NGINX_IMAGE=.container_images.nginx
+          NODE_EXPORTER_IMAGE=.container_images.node_exporter
+          REDIS_MAXMEMORY=.ingest_config.redis_maxmemory
+          INGEST_DOMAIN=.ingest_config.domain
+          CONTROL_PORT=.ingest_config.control_port
+          OTEL_GRPC_PORT=.ingest_config.otel_grpc_port
+          REDIS_EVENT_TTL_SEC=.ingest_config.redis_event_ttl_sec
+          GAME_END_GRACE_MS=.ingest_config.game_end_grace_ms
+        vars: |
+          DISPATCHER_IMAGE=${{ inputs.dispatcher_image }}
+          CONTROL_HOST=${{ inputs.control_host }}
+
+    - name: Download TLS certificates from GCS
+      shell: bash
+      run: |
+        mkdir -p deployment/vms/vm1-ingest/certs
+        gcloud storage cp "gs://${STATE_BUCKET}/certs/${INGEST_DOMAIN}/*" deployment/vms/vm1-ingest/certs/
+
+    - name: Copy files to VM
+      shell: bash
+      run: |
+        gcloud compute ssh "${{ inputs.vm_name }}" \
+          --zone="${REGION}-${ZONE}" \
+          --tunnel-through-iap \
+          --command="mkdir -p /tmp/observelol"
+        shopt -s dotglob
+        gcloud compute scp --recurse \
+          deployment/vms/vm1-ingest/* \
+          "${{ inputs.vm_name }}:/tmp/observelol/" \
+          --zone="${REGION}-${ZONE}" \
+          --tunnel-through-iap
+
+    - name: Apply Docker Compose on VM
+      shell: bash
+      run: |
+        gcloud compute ssh "${{ inputs.vm_name }}" \
+          --zone="${REGION}-${ZONE}" \
+          --tunnel-through-iap \
+          --command="sudo mkdir -p /var/lib/observelol && sudo cp -r /tmp/observelol/. /var/lib/observelol/ && sudo rm -rf /tmp/observelol && sudo systemctl restart observelol.service"
