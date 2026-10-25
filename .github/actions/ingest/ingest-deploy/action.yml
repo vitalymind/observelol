@@ -1,5 +1,5 @@
 name: "Ingest Build and Deploy"
-description: "Builds Dispatcher image, pushes to Artifact Registry, and deploys configs to VM1"
+description: "Builds Dispatcher image, pushes to Artifact Registry, and deploys configs to production VM1"
 
 inputs:
   vm2_internal_ip:
@@ -19,10 +19,7 @@ runs:
           RUST_BUILDER=.container_images.rust_builder
           DEBIAN_RUNTIME=.container_images.debian_runtime
           REGION=.GCP_REGION
-          ZONE=.infra_definitions.zone
           VM_NAME=.infra_definitions.ingest_vm.name
-          STATE_BUCKET=.GCP_STATE_BUCKET_NAME
-          INGEST_DOMAIN=.ingest_config.domain
 
     - name: Load GCP OIDC configuration from config.yml
       uses: ./.github/actions/helpers/load-oidc-config
@@ -51,44 +48,9 @@ runs:
         docker push "${{ inputs.artifact_registry_url }}/dispatcher:${GITHUB_SHA}"
         docker push "${{ inputs.artifact_registry_url }}/dispatcher:latest"
 
-    - name: Render .env on runner
-      uses: ./.github/actions/helpers/render-env
+    - name: Deploy stack to Ingest VM
+      uses: ./.github/actions/ingest/ingest-apply
       with:
-        output_file: deployment/vms/vm1-ingest/.env
-        mappings: |
-          REDIS_IMAGE=.container_images.redis
-          NGINX_IMAGE=.container_images.nginx
-          NODE_EXPORTER_IMAGE=.container_images.node_exporter
-          REDIS_MAXMEMORY=.ingest_config.redis_maxmemory
-          INGEST_DOMAIN=.ingest_config.domain
-          CONTROL_PORT=.ingest_config.control_port
-          OTEL_GRPC_PORT=.ingest_config.otel_grpc_port
-          REDIS_EVENT_TTL_SEC=.ingest_config.redis_event_ttl_sec
-          GAME_END_GRACE_MS=.ingest_config.game_end_grace_ms
-        vars: |
-          DISPATCHER_IMAGE=${{ inputs.artifact_registry_url }}/dispatcher:${{ github.sha }}
-          CONTROL_HOST=${{ inputs.vm2_internal_ip }}
-
-    - name: Download TLS certificates from GCS
-      shell: bash
-      run: |
-        mkdir -p deployment/vms/vm1-ingest/certs
-        gcloud storage cp "gs://${STATE_BUCKET}/certs/${INGEST_DOMAIN}/*" deployment/vms/vm1-ingest/certs/
-
-    - name: Copy VM1 folder to VM1
-      shell: bash
-      run: |
-        shopt -s dotglob
-        gcloud compute scp --recurse \
-          deployment/vms/vm1-ingest/* \
-          "${VM_NAME}:/tmp/observelol/" \
-          --zone="${REGION}-${ZONE}" \
-          --tunnel-through-iap
-
-    - name: Apply Docker Compose on VM1
-      shell: bash
-      run: |
-        gcloud compute ssh "${VM_NAME}" \
-          --zone="${REGION}-${ZONE}" \
-          --tunnel-through-iap \
-          --command="sudo mkdir -p /var/lib/observelol && sudo cp -r /tmp/observelol/. /var/lib/observelol/ && sudo rm -rf /tmp/observelol && sudo systemctl restart observelol.service"
+        vm_name: ${{ env.VM_NAME }}
+        dispatcher_image: ${{ inputs.artifact_registry_url }}/dispatcher:${{ github.sha }}
+        control_host: ${{ inputs.vm2_internal_ip }}

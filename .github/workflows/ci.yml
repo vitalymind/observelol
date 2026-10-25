@@ -30,14 +30,23 @@ jobs:
       - name: Run Python Checks
         uses: ./.github/actions/python/python-format
 
-  ingest-verify:
+  ingest-verify-rust:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Run Ingest Rust Verify
-        uses: ./.github/actions/ingest/ingest-verify
+        uses: ./.github/actions/ingest/ingest-verify-rust
+
+  ingest-verify-vm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Builds image, provision test VM and runs deploy
+        uses: ./.github/actions/ingest/ingest-verify-vm
 
   infra-plan:
     runs-on: ubuntu-latest
@@ -50,7 +59,7 @@ jobs:
   
   # DEPLOYMENT (on push)
   infra-apply:
-    needs: [python, ingest-verify, infra-plan]
+    needs: [python, ingest-verify-rust, ingest-verify-vm, infra-plan]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:

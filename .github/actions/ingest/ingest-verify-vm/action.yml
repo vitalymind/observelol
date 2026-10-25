@@ -1,0 +1,109 @@
+name: "Ingest Verify VM"
+description: "Builds test image, provisions an ephemeral COS VM in GCP, deploys stack via ingest-apply, verifies health, and destroys VM"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load config variables
+      uses: ./.github/actions/helpers/load-config
+      with:
+        mappings: |
+          REGION=.GCP_REGION
+          ZONE=.infra_definitions.zone
+          IMAGE=.infra_definitions.ingest_vm.image
+          MACHINE_TYPE=.infra_definitions.ingest_vm.type
+          SUBNET=.infra_definitions.subnet
+          VM_SA=.GCP_VM_SA_NAME
+          PROJECT_ID=.GCP_PROJECT_ID
+          INGEST_DOMAIN=.ingest_config.domain
+          RUST_BUILDER=.container_images.rust_builder
+          DEBIAN_RUNTIME=.container_images.debian_runtime
+
+    - name: Load GCP OIDC configuration
+      uses: ./.github/actions/helpers/load-oidc-config
+
+    - name: Authenticate to Google Cloud (OIDC)
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+    - name: Configure Docker for Artifact Registry
+      shell: bash
+      run: |
+        gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+    - name: Build and push Dispatcher test image
+      shell: bash
+      run: |
+        TEST_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${PROJECT_ID}/dispatcher:test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+        echo "TEST_IMAGE=$TEST_IMAGE" >> "$GITHUB_ENV"
+        docker build \
+          --build-arg RUST_BUILDER_IMAGE="$RUST_BUILDER" \
+          --build-arg DEBIAN_RUNTIME_IMAGE="$DEBIAN_RUNTIME" \
+          -f services/rust/dispatcher/Dockerfile \
+          -t "$TEST_IMAGE" \
+          services/rust
+        docker push "$TEST_IMAGE"
+
+    - name: Create Ephemeral Test VM
+      shell: bash
+      env:
+        VM_TEST_NAME: "ingest-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        sed "s/\${region}/${REGION}/g" deployment/vms/vm1-ingest/cloud-init.yml > /tmp/rendered-cloud-init.yml
+
+        IMAGE_PROJECT="${IMAGE%%/*}"
+        IMAGE_FAMILY="${IMAGE##*/}"
+
+        gcloud compute instances create "${VM_TEST_NAME}" \
+          --zone="${REGION}-${ZONE}" \
+          --machine-type="${MACHINE_TYPE}" \
+          --provisioning-model=SPOT \
+          --image-project="${IMAGE_PROJECT}" \
+          --image-family="${IMAGE_FAMILY}" \
+          --subnet="${SUBNET}" \
+          --service-account="${VM_SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
+          --scopes=cloud-platform \
+          --metadata-from-file=user-data=/tmp/rendered-cloud-init.yml
+
+    - name: Wait for VM SSH to become available
+      shell: bash
+      env:
+        VM_TEST_NAME: "ingest-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        for i in {1..24}; do
+          if gcloud compute ssh "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --tunnel-through-iap --command="echo ready" --quiet; then
+            break
+          fi
+          echo "Waiting for VM SSH... ($i/24)"
+          sleep 5
+        done
+
+    - name: Deploy Stack to Test VM
+      uses: ./.github/actions/ingest/ingest-apply
+      with:
+        vm_name: "ingest-test-${{ github.run_id }}-${{ github.run_attempt }}"
+        dispatcher_image: ${{ env.TEST_IMAGE }}
+        control_host: "127.0.0.1"
+
+    - name: "Smoke test: Verify /health endpoint"
+      shell: bash
+      env:
+        VM_TEST_NAME: "ingest-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        gcloud compute ssh "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --tunnel-through-iap --command="curl -k -f -s -i -H 'Host: ${INGEST_DOMAIN}' https://127.0.0.1/health"
+
+    - name: Teardown Test VM and Artifacts (Always Runs)
+      if: always()
+      shell: bash
+      env:
+        VM_TEST_NAME: "ingest-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        gcloud compute instances delete "${VM_TEST_NAME}" \
+          --zone="${REGION}-${ZONE}" \
+          --quiet || true
+
+        if [ -n "${TEST_IMAGE}" ]; then
+          gcloud artifacts docker images delete "${TEST_IMAGE}" --quiet --delete-tags || true
+        fi
