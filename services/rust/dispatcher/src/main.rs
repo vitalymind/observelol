@@ -6,12 +6,10 @@ mod telemetry;
 
 use std::sync::Arc;
 
-use ::redis::aio::ConnectionManager;
-
 use crate::{
     config::DispatcherConfig,
     handlers::{AppState, build_router},
-    redis::{RedisStorage, ensure_consumer_group},
+    redis::RedisStorage,
     server::serve_unix_socket,
     telemetry::{DispatcherMetrics, init_telemetry},
 };
@@ -21,15 +19,9 @@ async fn main() {
     let config = DispatcherConfig::from_env();
     let (tracer_provider, meter_provider) = init_telemetry(&config.otel_endpoint);
 
-    let client =
-        ::redis::Client::open(config.redis_url.as_str()).expect("Invalid REDIS_URL provided");
-    let mut redis = ConnectionManager::new(client)
+    let storage = RedisStorage::connect(&config.redis_url)
         .await
-        .expect("Failed to establish multiplexed connection to Redis");
-
-    ensure_consumer_group(&mut redis).await;
-
-    let storage = RedisStorage::new(redis);
+        .expect("Failed to initialize Redis storage");
 
     let state = AppState {
         storage,

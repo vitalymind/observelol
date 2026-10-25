@@ -22,10 +22,15 @@ pub async fn serve_unix_socket(app: Router, socket_path: &str) {
 
     info!(socket_path, "Dispatcher listening on Unix Domain Socket");
 
-    axum::serve(listener, app)
+    let res = axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
-        .await
-        .expect("Dispatcher server terminated with error");
+        .await;
+
+    if path.exists() {
+        let _ = std::fs::remove_file(path);
+    }
+
+    res.expect("Dispatcher server terminated with error");
 }
 
 #[cfg(not(unix))]
@@ -35,6 +40,12 @@ pub async fn serve_unix_socket(_app: Router, _socket_path: &str) {
 
 #[cfg(unix)]
 async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
-    info!("Shutdown signal received");
+    use tokio::signal::unix::{signal, SignalKind};
+
+    if let Ok(mut sig) = signal(SignalKind::terminate()) {
+        sig.recv().await;
+    } else {
+        std::future::pending::<()>().await;
+    }
+    info!("SIGTERM shutdown signal received");
 }

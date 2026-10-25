@@ -31,11 +31,15 @@ pub struct RedisStorage {
 }
 
 impl RedisStorage {
-    pub fn new(redis: ConnectionManager) -> Self {
-        Self {
+    pub async fn connect(redis_url: &str) -> Result<Self, redis::RedisError> {
+        let client = redis::Client::open(redis_url)?;
+        let mut redis = ConnectionManager::new(client).await?;
+        ensure_consumer_group(&mut redis).await;
+
+        Ok(Self {
             redis,
             ingest_script: Arc::new(Script::new(INGEST_EVENT_LUA)),
-        }
+        })
     }
 }
 
