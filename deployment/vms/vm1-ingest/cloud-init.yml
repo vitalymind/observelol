@@ -1,0 +1,29 @@
+#cloud-config
+
+write_files:
+  - path: /etc/systemd/system/observelol.service
+    permissions: "0644"
+    owner: root
+    content: |
+      [Unit]
+      Description=ObserveLoL Docker Compose Stack
+      After=docker.service network-online.target
+      Requires=docker.service
+
+      [Service]
+      Type=oneshot
+      WorkingDirectory=/var/lib/observelol
+      # 1. Configure Artifact Registry auth (stored in volatile /root/.docker on COS)
+      ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries=${region}-docker.pkg.dev
+      # 2. Run docker compose via official docker:cli image (since COS has no host docker-compose binary)
+      ExecStart=/usr/bin/docker run --rm \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        -v /root/.docker:/root/.docker:ro \
+        -v /var/lib/observelol:/var/lib/observelol \
+        -w /var/lib/observelol \
+        docker:cli compose up -d --pull always --remove-orphans
+
+runcmd:
+  - mkdir -p /var/lib/observelol
+  - systemctl daemon-reload
+  - systemctl enable observelol.service

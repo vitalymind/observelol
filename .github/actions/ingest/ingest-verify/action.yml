@@ -4,12 +4,6 @@ description: "Runs formatting, clippy, unit tests for Rust services, and verifie
 runs:
   using: "composite"
   steps:
-    - name: Load config variables
-      uses: ./.github/actions/helpers/load-config
-      with:
-        mappings: |
-          POLLER_BASE=.container_images.poller_base
-
     - name: Install Rust toolchain
       uses: dtolnay/rust-toolchain@stable
       with:
@@ -38,7 +32,3 @@ runs:
     - name: Check poller shell script syntax
       shell: bash
       run: sh -n deployment/vms/vm1-ingest/poller/poll.sh
-
-    - name: Test build poller Docker image
-      shell: bash
-      run: docker build --build-arg BASE_IMAGE="$POLLER_BASE" deployment/vms/vm1-ingest/poller

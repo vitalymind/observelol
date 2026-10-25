@@ -63,7 +63,6 @@ container_images:
   redis: "redis:7-alpine"
   nginx: "nginx:1.30-alpine"
   node_exporter: "prom/node-exporter:v1.9.0"
-  poller_base: "google/cloud-sdk:alpine"
   rust_builder: "rust:1.99-slim-bookworm"
   debian_runtime: "debian:bookworm-slim"
 
