@@ -49,6 +49,7 @@ ROLES = [
     "roles/compute.admin",
     "roles/artifactregistry.admin",
     "roles/iam.serviceAccountUser",
+    "roles/iap.tunnelResourceAccessor",
 ]
 
 MAX_RETRIES = 6

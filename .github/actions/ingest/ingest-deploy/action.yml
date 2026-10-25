@@ -58,7 +58,8 @@ runs:
           if gcloud compute ssh "${VM_NAME}" \
             --zone="${REGION}-${ZONE}" \
             --tunnel-through-iap \
-            --command="cloud-init status --wait && mkdir -p /tmp/observelol" 2>/dev/null; then
+            --quiet \
+            --command="cloud-init status --wait && mkdir -p /tmp/observelol"; then
             exit 0
           fi
           echo "Waiting for VM1 SSH / cloud-init... ($i/24)"
