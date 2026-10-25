@@ -224,6 +224,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "common",
+ "http-body-util",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
@@ -232,6 +233,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tower",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",

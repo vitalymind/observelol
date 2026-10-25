@@ -6,12 +6,12 @@ mod telemetry;
 
 use std::sync::Arc;
 
-use ::redis::{Script, aio::ConnectionManager};
+use ::redis::aio::ConnectionManager;
 
 use crate::{
     config::DispatcherConfig,
     handlers::{AppState, build_router},
-    redis::{INGEST_EVENT_LUA, ensure_consumer_group},
+    redis::{RedisStorage, ensure_consumer_group},
     server::serve_unix_socket,
     telemetry::{DispatcherMetrics, init_telemetry},
 };
@@ -29,9 +29,10 @@ async fn main() {
 
     ensure_consumer_group(&mut redis).await;
 
+    let storage = RedisStorage::new(redis);
+
     let state = AppState {
-        redis,
-        ingest_script: Arc::new(Script::new(INGEST_EVENT_LUA)),
+        storage,
         config: config.clone(),
         metrics: Arc::new(DispatcherMetrics::new()),
     };
