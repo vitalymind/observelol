@@ -38,6 +38,15 @@ jobs:
 
       - name: Run Ingest Rust Verify
         uses: ./.github/actions/ingest/ingest-verify
+
+  infra-plan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Infrastructure Plan
+        uses: ./.github/actions/infra/infra-plan
   
   # DEPLOYMENT (on push)
   infra-apply:
