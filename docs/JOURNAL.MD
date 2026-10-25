@@ -24,3 +24,5 @@
 - cloud-init.yml is responsible of init on VM
 - cloud-init runs docker:cli compose up -d --pull always
 - Added letEncrypt bootstrap script, save cert to GCS
+- Fixed bunch of problems with deployment
+- Created proper smoke test using real VM test deployment

@@ -5,7 +5,7 @@ use std::{
 
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{DefaultBodyLimit, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -32,7 +32,10 @@ pub struct AppState {
 pub fn build_router(state: AppState) -> Router {
     Router::new()
         .route("/api/new-game/", get(handle_new_game))
-        .route("/api/event/", post(handle_event))
+        .route(
+            "/api/event/",
+            post(handle_event).layer(DefaultBodyLimit::max(4096)),
+        )
         .route("/health", get(handle_health))
         .with_state(state)
 }
@@ -79,6 +82,15 @@ async fn handle_event(
     State(state): State<AppState>,
     Json(incoming): Json<IncomingEvent>,
 ) -> impl IntoResponse {
+    // We check if event payload matches event type
+		if !incoming.is_valid_payload() {
+        state
+            .metrics
+            .errors_total
+            .add(1, &[KeyValue::new("stage", "invalid_payload")]);
+        return StatusCode::BAD_REQUEST;
+    }
+
     let game_id = incoming.game_id;
     let event_type = incoming.event_type;
     let stored = StoredEvent::from(incoming);
