@@ -1,0 +1,70 @@
+name: Production Deploy Orchestrator
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  # TESTING (on pr)
+  upload-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Upload config file
+        uses: ./.github/actions/helpers/upload-config
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Python Checks
+        uses: ./.github/actions/python/python-format
+
+  ingest-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Ingest Rust Verify
+        uses: ./.github/actions/ingest/ingest-verify
+  
+  # DEPLOYMENT (on push)
+  infra-apply:
+    needs: [python, ingest-verify, infra-plan]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    outputs:
+      vm2_internal_ip: ${{ steps.infra-apply.outputs.vm2_internal_ip }}
+      artifact_registry_url: ${{ steps.infra-apply.outputs.artifact_registry_url }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Infrastructure Apply
+        id: infra-apply
+        uses: ./.github/actions/infra/infra-apply
+
+  ingest-deploy:
+    needs: infra-apply
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Ingest Build and Deploy
+        uses: ./.github/actions/ingest/ingest-deploy
+        with:
+          vm2_internal_ip: ${{ needs.infra-apply.outputs.vm2_internal_ip }}
+          artifact_registry_url: ${{ needs.infra-apply.outputs.artifact_registry_url }}

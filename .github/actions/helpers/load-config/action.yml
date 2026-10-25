@@ -1,0 +1,27 @@
+name: "Load Config Variables"
+description: "Reads variables from config.yml and exports them to $GITHUB_ENV"
+
+inputs:
+  mappings:
+    description: "Newline-separated list of ENV_VAR=yaml.path pairs"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Export variables to GITHUB_ENV
+      shell: bash
+      run: |
+        CONFIG="$GITHUB_WORKSPACE/config.yml"
+
+        while IFS= read -r line || [ -n "$line" ]; do
+          # Trim leading/trailing whitespace
+          line=$(echo "$line" | xargs)
+          [ -z "$line" ] && continue
+
+          var_name="${line%%=*}"
+          yaml_path="${line#*=}"
+
+          val=$(yq -e "$yaml_path" "$CONFIG")
+          echo "$var_name=$val" >> "$GITHUB_ENV"
+        done <<< "${{ inputs.mappings }}"

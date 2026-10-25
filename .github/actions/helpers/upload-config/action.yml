@@ -1,0 +1,26 @@
+name: "Upload Config"
+description: "Converts config.yml to JSON and uploads to GCS"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load config variables
+      uses: ./.github/actions/helpers/load-config
+      with:
+        mappings: |
+          STATE_BUCKET=.GCP_STATE_BUCKET_NAME
+
+    - name: Load GCP OIDC configuration from config.yml
+      uses: ./.github/actions/helpers/load-oidc-config
+
+    - name: Authenticate to Google Cloud (OIDC)
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+    - name: Convert config.yml to JSON and upload to GCS
+      shell: bash
+      run: |
+        yq -o=json '.' "$GITHUB_WORKSPACE/config.yml" > config.json
+        gcloud storage cp config.json "gs://${STATE_BUCKET}/config.json"

@@ -1,0 +1,71 @@
+name: "Ingest Build and Deploy"
+description: "Builds Dispatcher and Poller images, pushes to Artifact Registry, and syncs VM1 configs to GCS"
+
+inputs:
+  vm2_internal_ip:
+    description: "Internal VPC IP of VM2 (control) from OpenTofu output"
+    required: true
+  artifact_registry_url:
+    description: "Artifact Registry base URL from OpenTofu output"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load config variables
+      uses: ./.github/actions/helpers/load-config
+      with:
+        mappings: |
+          RUST_BUILDER=.container_images.rust_builder
+          DEBIAN_RUNTIME=.container_images.debian_runtime
+          POLLER_BASE=.container_images.poller_base
+          REGION=.GCP_REGION
+          STATE_BUCKET=.GCP_STATE_BUCKET_NAME
+
+    - name: Load GCP OIDC configuration from config.yml
+      uses: ./.github/actions/helpers/load-oidc-config
+
+    - name: Authenticate to Google Cloud (OIDC)
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+    - name: Configure Docker for Artifact Registry
+      shell: bash
+      run: |
+        gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+    - name: Build and push Dispatcher image to Artifact Registry
+      shell: bash
+      run: |
+        docker build \
+          --build-arg RUST_BUILDER_IMAGE="$RUST_BUILDER" \
+          --build-arg DEBIAN_RUNTIME_IMAGE="$DEBIAN_RUNTIME" \
+          -f services/rust/dispatcher/Dockerfile \
+          -t "${{ inputs.artifact_registry_url }}/dispatcher:${GITHUB_SHA}" \
+          -t "${{ inputs.artifact_registry_url }}/dispatcher:latest" \
+          services/rust
+        docker push "${{ inputs.artifact_registry_url }}/dispatcher:${GITHUB_SHA}"
+        docker push "${{ inputs.artifact_registry_url }}/dispatcher:latest"
+
+    - name: Build and push Poller image to Artifact Registry
+      shell: bash
+      run: |
+        docker build \
+          --build-arg BASE_IMAGE="$POLLER_BASE" \
+          -f deployment/vms/vm1-ingest/poller/Dockerfile \
+          -t "${{ inputs.artifact_registry_url }}/poller:${GITHUB_SHA}" \
+          -t "${{ inputs.artifact_registry_url }}/poller:latest" \
+          deployment/vms/vm1-ingest/poller
+        docker push "${{ inputs.artifact_registry_url }}/poller:${GITHUB_SHA}"
+        docker push "${{ inputs.artifact_registry_url }}/poller:latest"
+
+    - name: Sync VM1 configs to GCS bucket
+      shell: bash
+      run: |
+        gcloud storage rsync \
+          deployment/vms/vm1-ingest \
+          "gs://${STATE_BUCKET}/vms/vm1-ingest" \
+          --exclude="poller/*" \
+          --delete-unmatched-destination-objects

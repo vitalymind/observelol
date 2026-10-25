@@ -1,0 +1,58 @@
+name: "Infrastructure Apply"
+description: "Applies OpenTofu infrastructure to GCP and exports key outputs"
+
+outputs:
+  vm2_internal_ip:
+    description: "Internal VPC IP of VM2 (control)"
+    value: ${{ steps.tf-outputs.outputs.vm2_internal_ip }}
+  artifact_registry_url:
+    description: "Docker Artifact Registry URL"
+    value: ${{ steps.tf-outputs.outputs.artifact_registry_url }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load config variables
+      uses: ./.github/actions/helpers/load-config
+      with:
+        mappings: |
+          STATE_BUCKET=.GCP_STATE_BUCKET_NAME
+    
+    - name: Load GCP OIDC configuration from config.yml
+      uses: ./.github/actions/helpers/load-oidc-config
+
+    - name: Authenticate to Google Cloud (OIDC)
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+    - name: Set up OpenTofu
+      uses: opentofu/setup-opentofu@v1
+      with:
+        tofu_version: ${{ env.OPENTOFU_VERSION }}
+
+    - name: Initialize OpenTofu (GCS Backend)
+      shell: bash
+      working-directory: deployment/infra
+      run: tofu init
+
+    - name: Apply changes to GCP
+      shell: bash
+      working-directory: deployment/infra
+      run: tofu apply -auto-approve
+
+    - name: Export OpenTofu outputs
+      id: tf-outputs
+      shell: bash
+      working-directory: deployment/infra
+      run: |
+        echo "vm2_internal_ip=$(tofu output -raw vm2_internal_ip)" >> "$GITHUB_OUTPUT"
+        echo "artifact_registry_url=$(tofu output -raw artifact_registry_url)" >> "$GITHUB_OUTPUT"
+
+    - name: Save infrastructure outputs to GCS as infra_config.json
+      shell: bash
+      working-directory: deployment/infra
+      run: |
+        tofu output -json | jq 'map_values(.value)' > infra_config.json
+        gcloud storage cp infra_config.json "gs://${STATE_BUCKET}/infra_config.json"

@@ -1,0 +1,20 @@
+name: "Python Checks"
+description: "Recursively validates syntax for all Python files in the repository"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load config variables
+      uses: ./.github/actions/helpers/load-config
+      with:
+        mappings: |
+          PYTHON_VERSION=.ci_versions.python
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Recursively check Python syntax
+      shell: python
+      run: python3 "${{ github.action_path }}/check_format.py"
