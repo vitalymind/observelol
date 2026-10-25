@@ -6,3 +6,5 @@ __pycache__/
 .env
 /bot_out.txt
 /BOT.txt
+certs/
+*.pem

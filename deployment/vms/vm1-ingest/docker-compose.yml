@@ -1,0 +1,65 @@
+services:
+  redis:
+    image: ${REDIS_IMAGE}
+    container_name: observelol-redis
+    restart: unless-stopped
+    command: >
+      /bin/sh -c "chmod 777 /var/run/redis &&
+      exec redis-server /usr/local/etc/redis/redis.conf --maxmemory ${REDIS_MAXMEMORY}"
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis_sock:/var/run/redis
+
+  dispatcher:
+    image: ${DISPATCHER_IMAGE}
+    container_name: observelol-dispatcher
+    restart: unless-stopped
+    depends_on:
+      - redis
+    environment:
+      REDIS_URL: "unix:///var/run/redis/redis.sock"
+      DISPATCHER_SOCKET_PATH: "/var/run/dispatcher/dispatcher.sock"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://${CONTROL_HOST}:${OTEL_GRPC_PORT}"
+      REDIS_EVENT_TTL_SEC: "${REDIS_EVENT_TTL_SEC}"
+      GAME_END_GRACE_MS: "${GAME_END_GRACE_MS}"
+    volumes:
+      - redis_sock:/var/run/redis
+      - dispatcher_sock:/var/run/dispatcher
+
+  nginx:
+    image: ${NGINX_IMAGE}
+    container_name: observelol-nginx
+    restart: unless-stopped
+    depends_on:
+      - dispatcher
+    environment:
+      INGEST_DOMAIN: "${INGEST_DOMAIN}"
+      CONTROL_HOST: "${CONTROL_HOST}"
+      CONTROL_PORT: "${CONTROL_PORT}"
+    command: >
+      /bin/sh -c "envsubst '$${INGEST_DOMAIN} $${CONTROL_HOST} $${CONTROL_PORT}'
+      < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf &&
+      exec nginx -g 'daemon off;'"
+    ports:
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf.template:ro
+      - ./certs:/etc/letsencrypt/live/${INGEST_DOMAIN}:ro
+      - dispatcher_sock:/var/run/dispatcher
+
+  node-exporter:
+    image: ${NODE_EXPORTER_IMAGE}
+    container_name: observelol-node-exporter
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - /:/host:ro,rslave
+
+volumes:
+  redis_sock:
+  dispatcher_sock:

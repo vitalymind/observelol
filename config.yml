@@ -52,3 +52,25 @@ infra_definitions:
       name: db-storage
       size: 20
       type: pd-ssd
+
+# Tooling & CI Versions
+ci_versions:
+  opentofu: "1.13.2"
+  python: "3.13"
+
+# Container Images
+container_images:
+  redis: "redis:7-alpine"
+  nginx: "nginx:1.30-alpine"
+  node_exporter: "prom/node-exporter:v1.9.0"
+  rust_builder: "rust:1.99-slim-bookworm"
+  debian_runtime: "debian:bookworm-slim"
+
+# Application & Ingest configuration
+ingest_config:
+  domain: "observelol.vbrokh.dev"
+  redis_maxmemory: "1gb"
+  redis_event_ttl_sec: 900
+  game_end_grace_ms: 1000
+  control_port: 3000
+  otel_grpc_port: 4317

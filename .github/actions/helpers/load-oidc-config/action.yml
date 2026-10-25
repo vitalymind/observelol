@@ -1,0 +1,22 @@
+name: "Load Configuration"
+description: "Reads config.yml using yq and exports OpenTofu and OIDC variables to $GITHUB_ENV"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load config variables
+      uses: ./.github/actions/helpers/load-config
+      with:
+        mappings: |
+          PROJECT_ID=.GCP_PROJECT_ID
+          PROJECT_NUMBER=.GCP_PROJECT_NUMBER
+          POOL=.GCP_WORKLOAD_IDENTITY_POOL
+          PROVIDER=.GCP_WORKLOAD_IDENTITY_PROVIDER
+          DEPLOY_SA=.GCP_DEPLOY_SA_NAME
+          OPENTOFU_VERSION=.ci_versions.opentofu
+
+    - name: Assemble OIDC credentials and export to $GITHUB_ENV
+      shell: bash
+      run: |
+        echo "GCP_WORKLOAD_IDENTITY_PROVIDER=projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$POOL/providers/$PROVIDER" >> "$GITHUB_ENV"
+        echo "GCP_SERVICE_ACCOUNT=$DEPLOY_SA@$PROJECT_ID.iam.gserviceaccount.com" >> "$GITHUB_ENV"

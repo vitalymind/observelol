@@ -1,0 +1,39 @@
+name: "Infrastructure Plan"
+description: "Validates OpenTofu formatting, configuration, and generates an execution plan"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load GCP OIDC configuration from config.yml
+      uses: ./.github/actions/helpers/load-oidc-config
+
+    - name: Authenticate to Google Cloud (OIDC)
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+    - name: Set up OpenTofu
+      uses: opentofu/setup-opentofu@v1
+      with:
+        tofu_version: ${{ env.OPENTOFU_VERSION }}
+
+    - name: Check formatting
+      shell: bash
+      working-directory: deployment/infra
+      run: tofu fmt -check
+
+    - name: Initialize OpenTofu (GCS Backend)
+      shell: bash
+      working-directory: deployment/infra
+      run: tofu init
+
+    - name: Validate configuration
+      shell: bash
+      working-directory: deployment/infra
+      run: tofu validate
+
+    - name: Generate execution plan
+      shell: bash
+      working-directory: deployment/infra
+      run: tofu plan

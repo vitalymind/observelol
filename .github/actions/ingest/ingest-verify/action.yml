@@ -1,0 +1,30 @@
+name: "Ingest Verify"
+description: "Runs formatting, clippy, unit tests for Rust services, and verifies poller scripts/build"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - name: Cache Cargo registry and build artifacts
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: "services/rust -> target"
+
+    - name: Check formatting
+      shell: bash
+      working-directory: services/rust
+      run: cargo fmt --all -- --check
+
+    - name: Run Clippy lints
+      shell: bash
+      working-directory: services/rust
+      run: cargo clippy --package common --package dispatcher --all-targets -- -D warnings
+
+    - name: Run unit tests
+      shell: bash
+      working-directory: services/rust
+      run: cargo test --package common --package dispatcher
