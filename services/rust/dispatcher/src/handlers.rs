@@ -10,7 +10,7 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use common::{EventType, IncomingEvent, NewGameResponse, StoredEvent};
+use common::{EventType, IncomingEvent, NewGameResponse};
 use dashmap::DashMap;
 use opentelemetry::KeyValue;
 use tracing::{error, warn};
@@ -122,19 +122,9 @@ async fn handle_event<S: Storage>(
 ) -> impl IntoResponse {
     let game_id = incoming.game_id;
     let event_type = incoming.event_type;
-    let stored = match StoredEvent::try_from(incoming) {
-        Ok(s) => s,
-        Err(_) => {
-            state
-                .metrics
-                .errors_total
-                .add(1, &[KeyValue::new("stage", "invalid_payload")]);
-            return StatusCode::BAD_REQUEST;
-        }
-    };
 
     let mut buf = [0u8; EVENT_BUFFER_CAPACITY];
-    let encoded = match postcard::to_slice(&stored, &mut buf) {
+    let encoded = match postcard::to_slice(&incoming.stored, &mut buf) {
         Ok(bytes) => bytes,
         Err(err) => {
             error!(error = %err, %game_id, "Failed to serialize StoredEvent with postcard");
@@ -148,8 +138,9 @@ async fn handle_event<S: Storage>(
 
     let start = Instant::now();
     let res = state.storage.ingest_event(&game_id, encoded).await;
+    let now = Instant::now();
     state.metrics.redis_latency_ms.record(
-        start.elapsed().as_secs_f64() * 1000.0,
+        now.duration_since(start).as_secs_f64() * 1000.0,
         &[KeyValue::new("op", "rpush")],
     );
 
@@ -162,7 +153,7 @@ async fn handle_event<S: Storage>(
         return StatusCode::INTERNAL_SERVER_ERROR;
     }
 
-    state.activity.insert(game_id, Instant::now());
+    state.activity.insert(game_id, now);
 
     state
         .metrics
@@ -207,15 +198,18 @@ mod tests {
         body::Body,
         http::{Request, StatusCode},
     };
+    use common::StoredEvent;
     use http_body_util::BodyExt;
     use serde_json::json;
     use std::sync::{Arc, Mutex};
     use tower::ServiceExt;
 
+    type IngestedEvent = (Uuid, Vec<u8>);
+
     #[derive(Clone)]
     struct MockStorage {
         snapshot: Arc<Mutex<Result<Option<String>, String>>>,
-        ingested: Arc<Mutex<Vec<(Uuid, Vec<u8>)>>>,
+        ingested: Arc<Mutex<Vec<IngestedEvent>>>,
         game_ended: Arc<Mutex<Vec<Uuid>>>,
         unlinked: Arc<Mutex<Vec<Uuid>>>,
         should_fail_ping: Arc<Mutex<bool>>,
@@ -418,7 +412,7 @@ mod tests {
             .unwrap();
 
         let res = app.oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(res.status(), StatusCode::UNPROCESSABLE_ENTITY);
         assert!(storage.ingested.lock().unwrap().is_empty());
     }
 

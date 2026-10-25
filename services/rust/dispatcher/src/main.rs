@@ -21,7 +21,7 @@ async fn main() {
     let config = DispatcherConfig::from_env();
     let (tracer_provider, meter_provider) = init_telemetry(&config.otel_endpoint);
 
-    let storage = RedisStorage::connect(&config.redis_url)
+    let storage = RedisStorage::connect(&config.redis_url, config.redis_event_ttl_sec * 2)
         .await
         .expect("Failed to initialize Redis storage");
 

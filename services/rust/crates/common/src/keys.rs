@@ -9,7 +9,35 @@ pub const WORKERS_CONSUMER_GROUP: &str = "workers";
 /// Redis key storing the currently active Heroes & Items snapshot JSON.
 pub const ACTIVE_SNAPSHOT_KEY: &str = "snapshot:active";
 
-/// Formats the Redis list key used to buffer events for a specific game.
-pub fn game_events_key(game_id: &Uuid) -> String {
-    format!("game:{game_id}:events")
+/// Stack-allocated Redis list key (`game:{game_id}:events`, 48 bytes) to avoid heap allocations on the hot path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GameEventsKey([u8; 48]);
+
+impl GameEventsKey {
+    #[inline]
+    pub fn new(game_id: &Uuid) -> Self {
+        let mut buf = [0u8; 48];
+        buf[..5].copy_from_slice(b"game:");
+        game_id.as_hyphenated().encode_lower(&mut buf[5..41]);
+        buf[41..].copy_from_slice(b":events");
+        Self(buf)
+    }
+
+    #[inline]
+    pub fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.0).expect("GameEventsKey is always valid ASCII")
+    }
+}
+
+impl AsRef<str> for GameEventsKey {
+    #[inline]
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+/// Formats the Redis list key used to buffer events for a specific game on the stack.
+#[inline]
+pub fn game_events_key(game_id: &Uuid) -> GameEventsKey {
+    GameEventsKey::new(game_id)
 }

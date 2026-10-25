@@ -1,4 +1,5 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
+use serde_json::value::RawValue;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use uuid::Uuid;
 
@@ -29,86 +30,150 @@ impl EventType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub struct GameStartedPayload {
-    pub started_at: u64,
+struct GameStartedPayload {
+    started_at: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub struct HeroSelectedPayload {
-    pub slot: u8,
-    pub hero_id: u32,
-    pub version_id: u32,
+struct HeroSelectedPayload {
+    slot: u8,
+    hero_id: u32,
+    version_id: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub struct ItemBoughtPayload {
-    pub slot: u8,
-    pub item_id: u32,
-    pub version_id: u32,
+struct ItemBoughtPayload {
+    slot: u8,
+    item_id: u32,
+    version_id: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub struct KillPayload {
-    pub killer_slot: u8,
-    pub victim_slot: u8,
+struct KillPayload {
+    killer_slot: u8,
+    victim_slot: u8,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub struct LevelUpPayload {
-    pub slot: u8,
-    pub level: u8,
+struct LevelUpPayload {
+    slot: u8,
+    level: u8,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub struct EmptyPayload {}
+struct EmptyPayload {}
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum EventPayload {
-    GameStarted(GameStartedPayload),
-    HeroSelected(HeroSelectedPayload),
-    ItemBought(ItemBoughtPayload),
-    Kill(KillPayload),
-    LevelUp(LevelUpPayload),
-    Empty(EmptyPayload),
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawIncomingEvent<'a> {
+    game_id: Uuid,
+    timestamp_ms: u32,
+    event_index: u32,
+    event_type: EventType,
+    #[serde(borrow, default)]
+    payload: Option<&'a RawValue>,
 }
 
-impl Default for EventPayload {
-    fn default() -> Self {
-        EventPayload::Empty(EmptyPayload {})
-    }
+#[inline]
+fn parse_payload<'a, T: Deserialize<'a>, E: de::Error>(raw: Option<&'a RawValue>) -> Result<T, E> {
+    let json = raw.map_or("{}", RawValue::get);
+    serde_json::from_str(json).map_err(de::Error::custom)
 }
 
 /// Event payload sent by Producers to `POST /api/event/`.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+/// Deserializes the inner `payload` directly by `event_type` into `StoredEvent`
+/// without heap-buffering an untagged enum.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IncomingEvent {
     pub game_id: Uuid,
-    pub timestamp_ms: u32,
-    pub event_index: u32,
     pub event_type: EventType,
-    #[serde(default)]
-    pub payload: EventPayload,
+    pub stored: StoredEvent,
 }
 
-impl IncomingEvent {
-    pub fn is_valid_payload(&self) -> bool {
-        match (&self.event_type, &self.payload) {
-            (EventType::GameStarted, EventPayload::GameStarted(_)) => true,
-            (EventType::HeroSelected, EventPayload::HeroSelected(_)) => true,
-            (EventType::RoundStart, EventPayload::Empty(_)) => true,
-            (EventType::ItemBought, EventPayload::ItemBought(_)) => true,
-            (EventType::Kill, EventPayload::Kill(_)) => true,
-            (EventType::LevelUp, EventPayload::LevelUp(_)) => true,
-            (EventType::GameEnds, EventPayload::Empty(_)) => true,
-            _ => false,
-        }
+impl<'de> Deserialize<'de> for IncomingEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = RawIncomingEvent::deserialize(deserializer)?;
+        let timestamp_ms = raw.timestamp_ms;
+        let event_index = raw.event_index;
+
+        let stored = match raw.event_type {
+            EventType::GameStarted => {
+                let p: GameStartedPayload = parse_payload(raw.payload)?;
+                StoredEvent::GameStarted {
+                    timestamp_ms,
+                    event_index,
+                    started_at: p.started_at,
+                }
+            }
+            EventType::HeroSelected => {
+                let p: HeroSelectedPayload = parse_payload(raw.payload)?;
+                StoredEvent::HeroSelected {
+                    timestamp_ms,
+                    event_index,
+                    slot: p.slot,
+                    hero_id: p.hero_id,
+                    version_id: p.version_id,
+                }
+            }
+            EventType::RoundStart => {
+                let _: EmptyPayload = parse_payload(raw.payload)?;
+                StoredEvent::RoundStart {
+                    timestamp_ms,
+                    event_index,
+                }
+            }
+            EventType::ItemBought => {
+                let p: ItemBoughtPayload = parse_payload(raw.payload)?;
+                StoredEvent::ItemBought {
+                    timestamp_ms,
+                    event_index,
+                    slot: p.slot,
+                    item_id: p.item_id,
+                    version_id: p.version_id,
+                }
+            }
+            EventType::Kill => {
+                let p: KillPayload = parse_payload(raw.payload)?;
+                StoredEvent::Kill {
+                    timestamp_ms,
+                    event_index,
+                    killer_slot: p.killer_slot,
+                    victim_slot: p.victim_slot,
+                }
+            }
+            EventType::LevelUp => {
+                let p: LevelUpPayload = parse_payload(raw.payload)?;
+                StoredEvent::LevelUp {
+                    timestamp_ms,
+                    event_index,
+                    slot: p.slot,
+                    level: p.level,
+                }
+            }
+            EventType::GameEnds => {
+                let _: EmptyPayload = parse_payload(raw.payload)?;
+                StoredEvent::GameEnds {
+                    timestamp_ms,
+                    event_index,
+                }
+            }
+        };
+
+        Ok(Self {
+            game_id: raw.game_id,
+            event_type: raw.event_type,
+            stored,
+        })
     }
 }
 
@@ -183,55 +248,6 @@ impl StoredEvent {
     }
 }
 
-impl TryFrom<IncomingEvent> for StoredEvent {
-    type Error = &'static str;
-
-    fn try_from(event: IncomingEvent) -> Result<Self, Self::Error> {
-        match (event.event_type, event.payload) {
-            (EventType::GameStarted, EventPayload::GameStarted(p)) => Ok(StoredEvent::GameStarted {
-                timestamp_ms: event.timestamp_ms,
-                event_index: event.event_index,
-                started_at: p.started_at,
-            }),
-            (EventType::HeroSelected, EventPayload::HeroSelected(p)) => Ok(StoredEvent::HeroSelected {
-                timestamp_ms: event.timestamp_ms,
-                event_index: event.event_index,
-                slot: p.slot,
-                hero_id: p.hero_id,
-                version_id: p.version_id,
-            }),
-            (EventType::RoundStart, EventPayload::Empty(_)) => Ok(StoredEvent::RoundStart {
-                timestamp_ms: event.timestamp_ms,
-                event_index: event.event_index,
-            }),
-            (EventType::ItemBought, EventPayload::ItemBought(p)) => Ok(StoredEvent::ItemBought {
-                timestamp_ms: event.timestamp_ms,
-                event_index: event.event_index,
-                slot: p.slot,
-                item_id: p.item_id,
-                version_id: p.version_id,
-            }),
-            (EventType::Kill, EventPayload::Kill(p)) => Ok(StoredEvent::Kill {
-                timestamp_ms: event.timestamp_ms,
-                event_index: event.event_index,
-                killer_slot: p.killer_slot,
-                victim_slot: p.victim_slot,
-            }),
-            (EventType::LevelUp, EventPayload::LevelUp(p)) => Ok(StoredEvent::LevelUp {
-                timestamp_ms: event.timestamp_ms,
-                event_index: event.event_index,
-                slot: p.slot,
-                level: p.level,
-            }),
-            (EventType::GameEnds, EventPayload::Empty(_)) => Ok(StoredEvent::GameEnds {
-                timestamp_ms: event.timestamp_ms,
-                event_index: event.event_index,
-            }),
-            _ => Err("Mismatched event type and payload"),
-        }
-    }
-}
-
 /// Response returned by `GET /api/new-game/`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewGameResponse {
@@ -259,17 +275,15 @@ mod tests {
             }
         });
 
-        let incoming: IncomingEvent = serde_json::from_value(raw_json).unwrap();
+        let bytes = serde_json::to_vec(&raw_json).unwrap();
+        let incoming: IncomingEvent = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(incoming.event_type, EventType::HeroSelected);
-        assert!(incoming.is_valid_payload());
+        assert_eq!(incoming.stored.event_index(), 2);
+        assert_eq!(incoming.stored.timestamp_ms(), 1500);
 
-        let stored = StoredEvent::try_from(incoming).unwrap();
-        assert_eq!(stored.event_index(), 2);
-        assert_eq!(stored.timestamp_ms(), 1500);
-
-        let binary = postcard::to_allocvec(&stored).unwrap();
+        let binary = postcard::to_allocvec(&incoming.stored).unwrap();
         let decoded: StoredEvent = postcard::from_bytes(&binary).unwrap();
-        assert_eq!(stored, decoded);
+        assert_eq!(incoming.stored, decoded);
     }
 
     #[test]
@@ -287,7 +301,8 @@ mod tests {
             }
         });
 
-        let res: Result<IncomingEvent, _> = serde_json::from_value(raw_json);
+        let bytes = serde_json::to_vec(&raw_json).unwrap();
+        let res: Result<IncomingEvent, _> = serde_json::from_slice(&bytes);
         assert!(
             res.is_err(),
             "Payload with unknown fields should be rejected"
@@ -307,10 +322,11 @@ mod tests {
             }
         });
 
-        let incoming: IncomingEvent = serde_json::from_value(raw_json).unwrap();
+        let bytes = serde_json::to_vec(&raw_json).unwrap();
+        let res: Result<IncomingEvent, _> = serde_json::from_slice(&bytes);
         assert!(
-            !incoming.is_valid_payload(),
-            "Mismatched payload should be detected as invalid"
+            res.is_err(),
+            "Mismatched payload should be rejected during deserialization"
         );
     }
 }

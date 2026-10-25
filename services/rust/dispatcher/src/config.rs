@@ -1,4 +1,4 @@
-pub const EVENT_BUFFER_CAPACITY: usize = 4096;
+pub const EVENT_BUFFER_CAPACITY: usize = 32;
 
 #[derive(Clone)]
 pub struct DispatcherConfig {

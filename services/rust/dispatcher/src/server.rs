@@ -40,7 +40,7 @@ pub async fn serve_unix_socket(_app: Router, _socket_path: &str) {
 
 #[cfg(unix)]
 async fn shutdown_signal() {
-    use tokio::signal::unix::{signal, SignalKind};
+    use tokio::signal::unix::{SignalKind, signal};
 
     if let Ok(mut sig) = signal(SignalKind::terminate()) {
         sig.recv().await;

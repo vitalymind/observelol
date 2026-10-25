@@ -28,3 +28,6 @@
 - Created proper smoke test using real VM test deployment
 - Introduced payload schema validation (axum + serde)
 - Optimized data saved to redis
+- Removed LUA script, using rpush directly
+- Moved TTL management to Rust with dashmap
+- Several extra modifications, for faster hot loop
