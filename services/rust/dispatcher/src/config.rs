@@ -1,3 +1,5 @@
+pub const EVENT_BUFFER_CAPACITY: usize = 4096;
+
 #[derive(Clone)]
 pub struct DispatcherConfig {
     pub redis_url: String,

@@ -15,7 +15,11 @@ use opentelemetry::KeyValue;
 use tracing::{error, warn};
 use uuid::Uuid;
 
-use crate::{config::DispatcherConfig, redis::Storage, telemetry::DispatcherMetrics};
+use crate::{
+    config::{DispatcherConfig, EVENT_BUFFER_CAPACITY},
+    redis::Storage,
+    telemetry::DispatcherMetrics,
+};
 
 #[derive(Clone)]
 pub struct AppState<S: Storage> {
@@ -89,7 +93,8 @@ async fn handle_event<S: Storage>(
         }
     };
 
-    let encoded = match postcard::to_allocvec(&stored) {
+    let mut buf = [0u8; EVENT_BUFFER_CAPACITY];
+    let encoded = match postcard::to_slice(&stored, &mut buf) {
         Ok(bytes) => bytes,
         Err(err) => {
             error!(error = %err, %game_id, "Failed to serialize StoredEvent with postcard");
@@ -104,7 +109,7 @@ async fn handle_event<S: Storage>(
     let start = Instant::now();
     let res = state
         .storage
-        .ingest_event(&game_id, &encoded, state.config.redis_event_ttl_sec)
+        .ingest_event(&game_id, encoded, state.config.redis_event_ttl_sec)
         .await;
     state.metrics.redis_latency_ms.record(
         start.elapsed().as_secs_f64() * 1000.0,
@@ -122,7 +127,7 @@ async fn handle_event<S: Storage>(
 
     state.metrics.events_total.add(
         1,
-        &[KeyValue::new("event_type", (event_type as u8).to_string())],
+        &[KeyValue::new("event_type", event_type.as_str())],
     );
 
     if event_type == EventType::GameEnds {

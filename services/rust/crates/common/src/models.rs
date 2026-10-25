@@ -15,6 +15,20 @@ pub enum EventType {
     GameEnds = 7,
 }
 
+impl EventType {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::GameStarted => "1",
+            Self::HeroSelected => "2",
+            Self::RoundStart => "3",
+            Self::ItemBought => "4",
+            Self::Kill => "5",
+            Self::LevelUp => "6",
+            Self::GameEnds => "7",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct GameStartedPayload {
