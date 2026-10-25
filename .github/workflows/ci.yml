@@ -40,6 +40,7 @@ jobs:
         uses: ./.github/actions/ingest/ingest-verify-rust
 
   ingest-verify-vm:
+    needs: [ingest-verify-rust]
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
