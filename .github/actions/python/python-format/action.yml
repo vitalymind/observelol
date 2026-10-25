@@ -16,5 +16,5 @@ runs:
         python-version: ${{ env.PYTHON_VERSION }}
 
     - name: Recursively check Python syntax
-      shell: python
+      shell: bash
       run: python3 "${{ github.action_path }}/check_format.py"

@@ -41,7 +41,7 @@ resource "google_compute_instance" "vm1_ingest" {
     })
   }
 
-  desired_status = "RUNNING"
+  desired_status						 = "RUNNING"
   allow_stopping_for_update = true
 }
 
@@ -75,7 +75,7 @@ resource "google_compute_instance" "vm2_control" {
     scopes = ["cloud-platform"]
   }
 
-  desired_status = "RUNNING"
+  desired_status 						= "RUNNING"
   allow_stopping_for_update = true
 }
 
@@ -103,6 +103,6 @@ resource "google_compute_instance" "vm3_worker" {
     scopes = ["cloud-platform"]
   }
   
-  desired_status = "RUNNING"
+  desired_status 						= "RUNNING"
   allow_stopping_for_update = true
 }
