@@ -244,6 +244,7 @@ name = "common"
 version = "0.1.0"
 dependencies = [
  "postcard",
+ "prost",
  "serde",
  "serde_json",
  "serde_repr",
@@ -1266,6 +1267,8 @@ dependencies = [
  "bytes",
  "fallible-iterator",
  "postgres-protocol",
+ "serde_core",
+ "serde_json",
  "uuid",
 ]
 

@@ -3,6 +3,7 @@ mod database;
 mod process;
 mod redis;
 mod replay;
+mod rules;
 mod telemetry;
 
 use std::sync::Arc;

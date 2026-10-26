@@ -21,7 +21,8 @@ pub trait Database: Clone + Send + Sync + 'static {
     fn save_error(
         &self,
         game_id: &Uuid,
-        error_message: &str,
+        error_code: &str,
+        details: Option<&serde_json::Value>,
     ) -> impl std::future::Future<Output = Result<(), String>> + Send;
 
     fn ping(&self) -> impl std::future::Future<Output = Result<(), String>> + Send;
@@ -30,7 +31,7 @@ pub trait Database: Clone + Send + Sync + 'static {
 /// `DB_MODE=drop`: discards compiled replays and error reports
 /// after in-memory processing so the ingestion & worker pipeline can be stress-tested without CONTORL.
 #[derive(Debug, Clone, Default)]
-pub struct DropDatabase;
+pub(crate) struct DropDatabase;
 
 impl Database for DropDatabase {
     async fn save_replay(
@@ -42,7 +43,12 @@ impl Database for DropDatabase {
         Ok(())
     }
 
-    async fn save_error(&self, _game_id: &Uuid, _error_message: &str) -> Result<(), String> {
+    async fn save_error(
+        &self,
+        _game_id: &Uuid,
+        _error_code: &str,
+        _details: Option<&serde_json::Value>,
+    ) -> Result<(), String> {
         Ok(())
     }
 
@@ -54,12 +60,12 @@ impl Database for DropDatabase {
 ///`DB_MODE=postgres`: persists compiled replays and validation errors
 /// to PostgreSQL on CONTORL using a connection pool with idempotent `ON CONFLICT DO NOTHING` queries.
 #[derive(Clone)]
-pub struct PostgresDatabase {
+pub(crate) struct PostgresDatabase {
     pool: Pool,
 }
 
 impl PostgresDatabase {
-    pub fn from_url(database_url: &str) -> Result<Self, String> {
+    fn from_url(database_url: &str) -> Result<Self, String> {
         let pg_config = database_url
             .parse::<tokio_postgres::Config>()
             .map_err(|e| format!("Invalid DATABASE_URL: {e}"))?;
@@ -76,7 +82,7 @@ impl PostgresDatabase {
         Ok(Self { pool })
     }
 
-    pub async fn connect_with_retry(database_url: &str) -> Self {
+    async fn connect_with_retry(database_url: &str) -> Self {
         let db = Self::from_url(database_url).expect("Invalid PostgreSQL configuration");
         let retry_delay = Duration::from_secs(2);
 
@@ -118,14 +124,19 @@ impl Database for PostgresDatabase {
         Ok(())
     }
 
-    async fn save_error(&self, game_id: &Uuid, error_message: &str) -> Result<(), String> {
+    async fn save_error(
+        &self,
+        game_id: &Uuid,
+        error_code: &str,
+        details: Option<&serde_json::Value>,
+    ) -> Result<(), String> {
         let client = self.pool.get().await.map_err(|e| e.to_string())?;
         client
             .execute(
-                "INSERT INTO replay_errors (game_id, error_message) \
-                 VALUES ($1, $2) \
+                "INSERT INTO replay_errors (game_id, error_code, details) \
+                 VALUES ($1, $2, $3) \
                  ON CONFLICT (game_id) DO NOTHING",
-                &[game_id, &error_message],
+                &[game_id, &error_code, &details],
             )
             .await
             .map_err(|e| e.to_string())?;
@@ -179,10 +190,15 @@ impl Database for WorkerDatabase {
         }
     }
 
-    async fn save_error(&self, game_id: &Uuid, error_message: &str) -> Result<(), String> {
+    async fn save_error(
+        &self,
+        game_id: &Uuid,
+        error_code: &str,
+        details: Option<&serde_json::Value>,
+    ) -> Result<(), String> {
         match self {
-            Self::Drop(db) => db.save_error(game_id, error_message).await,
-            Self::Postgres(db) => db.save_error(game_id, error_message).await,
+            Self::Drop(db) => db.save_error(game_id, error_code, details).await,
+            Self::Postgres(db) => db.save_error(game_id, error_code, details).await,
         }
     }
 
@@ -209,7 +225,7 @@ mod tests {
                 .await
                 .is_ok()
         );
-        assert!(db.save_error(&game_id, "some error").await.is_ok());
+        assert!(db.save_error(&game_id, "SOME_ERROR", None).await.is_ok());
     }
 
     #[tokio::test]

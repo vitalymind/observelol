@@ -16,7 +16,7 @@ pub struct StreamEntry {
 }
 
 impl StreamEntry {
-    pub fn from_stream_id(mut entry: StreamId) -> Self {
+    pub(crate) fn from_stream_id(mut entry: StreamId) -> Self {
         let game_id = entry
             .map
             .remove("game_id")
@@ -29,7 +29,7 @@ impl StreamEntry {
         }
     }
 
-    pub fn from_read_reply(reply: StreamReadReply) -> Vec<Self> {
+    pub(crate) fn from_read_reply(reply: StreamReadReply) -> Vec<Self> {
         let mut entries = Vec::new();
         for key in reply.keys {
             for id in key.ids {
@@ -99,7 +99,7 @@ impl RedisStreamClient {
         }
     }
 
-    pub async fn try_connect(redis_url: &str) -> Result<Self, String> {
+    async fn try_connect(redis_url: &str) -> Result<Self, String> {
         let client = redis::Client::open(redis_url).map_err(|e| e.to_string())?;
         let redis = ConnectionManager::new(client)
             .await

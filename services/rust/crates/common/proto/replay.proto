@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package observelol;
+
+// Top-level message representing an entire game replay.
+message Replay {
+    repeated Event events = 1;
+}
+
+message Event {
+    uint32 timestamp_ms = 1;
+    uint32 event_index = 2;
+    oneof payload {
+        GameStarted game_started = 3;
+        HeroSelected hero_selected = 4;
+        RoundStart round_start = 5;
+        ItemBought item_bought = 6;
+        Kill kill = 7;
+        LevelUp level_up = 8;
+        GameEnds game_ends = 9;
+    }
+}
+
+message GameStarted {
+    uint64 started_at = 1;
+}
+
+message HeroSelected {
+    uint32 slot = 1;
+    uint32 hero_id = 2;
+    uint32 version_id = 3;
+}
+
+message RoundStart {}
+
+message ItemBought {
+    uint32 slot = 1;
+    uint32 item_id = 2;
+    uint32 version_id = 3;
+}
+
+message Kill {
+    uint32 killer_slot = 1;
+    uint32 victim_slot = 2;
+}
+
+message LevelUp {
+    uint32 slot = 1;
+    uint32 level = 2;
+}
+
+message GameEnds {}
