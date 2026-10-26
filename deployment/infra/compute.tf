@@ -75,6 +75,12 @@ resource "google_compute_instance" "vm2_control" {
     scopes = ["cloud-platform"]
   }
 
+  metadata = {
+    user-data = templatefile("${path.module}/../vms/vm2-control/cloud-init.yml", {
+      region = local.region
+    })
+  }
+
   desired_status            = "RUNNING"
   allow_stopping_for_update = true
 }

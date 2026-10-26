@@ -68,6 +68,15 @@ jobs:
       - name: Builds worker image, provisions test VM and runs deploy
         uses: ./.github/actions/worker/worker-verify-vm
 
+  control-verify-vm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Provisions test Control VM and verifies telemetry stack
+        uses: ./.github/actions/control/control-verify-vm
+
   infra-plan:
     runs-on: ubuntu-latest
     steps:
@@ -79,12 +88,13 @@ jobs:
   
   # DEPLOYMENT (on push)
   infra-apply:
-    needs: [python, ingest-verify-rust, ingest-verify-vm, worker-verify-rust, worker-verify-vm, infra-plan]
+    needs: [python, ingest-verify-rust, ingest-verify-vm, worker-verify-rust, worker-verify-vm, control-verify-vm, infra-plan]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
       vm1_internal_ip: ${{ steps.infra-apply.outputs.vm1_internal_ip }}
       vm2_internal_ip: ${{ steps.infra-apply.outputs.vm2_internal_ip }}
+      vm3_internal_ip: ${{ steps.infra-apply.outputs.vm3_internal_ip }}
       artifact_registry_url: ${{ steps.infra-apply.outputs.artifact_registry_url }}
     steps:
       - name: Check out repository
@@ -122,3 +132,18 @@ jobs:
           vm1_internal_ip: ${{ needs.infra-apply.outputs.vm1_internal_ip }}
           vm2_internal_ip: ${{ needs.infra-apply.outputs.vm2_internal_ip }}
           artifact_registry_url: ${{ needs.infra-apply.outputs.artifact_registry_url }}
+
+  control-deploy:
+    needs: infra-apply
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Control Deploy
+        uses: ./.github/actions/control/control-deploy
+        with:
+          vm1_internal_ip: ${{ needs.infra-apply.outputs.vm1_internal_ip }}
+          vm2_internal_ip: ${{ needs.infra-apply.outputs.vm2_internal_ip }}
+          vm3_internal_ip: ${{ needs.infra-apply.outputs.vm3_internal_ip }}

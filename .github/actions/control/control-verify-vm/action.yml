@@ -1,0 +1,101 @@
+name: "Control Verify VM"
+description: "Provisions an ephemeral COS VM in GCP, deploys telemetry stack via control-apply, verifies Grafana & node-exporter, and destroys VM"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load config variables
+      uses: ./.github/actions/helpers/load-config
+      with:
+        mappings: |
+          REGION=.GCP_REGION
+          ZONE=.infra_definitions.zone
+          IMAGE=.infra_definitions.control_vm.image
+          MACHINE_TYPE=.infra_definitions.control_vm.type
+          SUBNET=.infra_definitions.subnet
+          VM_SA=.GCP_VM_SA_NAME
+          PROJECT_ID=.GCP_PROJECT_ID
+
+    - name: Load GCP OIDC configuration
+      uses: ./.github/actions/helpers/load-oidc-config
+
+    - name: Authenticate to Google Cloud (OIDC)
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+    - name: Create Ephemeral Test VM
+      shell: bash
+      env:
+        VM_TEST_NAME: "control-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        sed "s/\${region}/${REGION}/g" deployment/vms/vm2-control/cloud-init.yml > /tmp/rendered-control-cloud-init.yml
+
+        IMAGE_PROJECT="${IMAGE%%/*}"
+        IMAGE_FAMILY="${IMAGE##*/}"
+
+        gcloud compute instances create "${VM_TEST_NAME}" \
+          --zone="${REGION}-${ZONE}" \
+          --machine-type="${MACHINE_TYPE}" \
+          --provisioning-model=SPOT \
+          --image-project="${IMAGE_PROJECT}" \
+          --image-family="${IMAGE_FAMILY}" \
+          --subnet="${SUBNET}" \
+          --service-account="${VM_SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
+          --scopes=cloud-platform \
+          --metadata-from-file=user-data=/tmp/rendered-control-cloud-init.yml
+
+    - name: Wait for VM SSH to become available
+      shell: bash
+      env:
+        VM_TEST_NAME: "control-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        for i in {1..24}; do
+          if gcloud compute ssh "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --tunnel-through-iap --command="echo ready" --quiet; then
+            break
+          fi
+          echo "Waiting for VM SSH... ($i/24)"
+          sleep 5
+        done
+
+    - name: Deploy Control Stack to Test VM
+      uses: ./.github/actions/control/control-apply
+      with:
+        vm_name: "control-test-${{ github.run_id }}-${{ github.run_attempt }}"
+        ingest_host: "127.0.0.1"
+        control_host: "127.0.0.1"
+        worker_host: "127.0.0.1"
+
+    - name: Smoke test Verify Grafana /api/health endpoint
+      shell: bash
+      env:
+        VM_TEST_NAME: "control-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        for i in {1..24}; do
+          if gcloud compute ssh "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --tunnel-through-iap --command="curl -f -s http://127.0.0.1:3000/api/health > /dev/null"; then
+            echo "Grafana is healthy on port 3000"
+            exit 0
+          fi
+          echo "Waiting for Grafana to start... ($i/24)"
+          sleep 3
+        done
+        echo "Grafana failed health check"
+        exit 1
+
+    - name: Smoke test Verify node-exporter metrics
+      shell: bash
+      env:
+        VM_TEST_NAME: "control-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        gcloud compute ssh "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --tunnel-through-iap --command="curl -f -s http://127.0.0.1:9100/metrics > /dev/null"
+
+    - name: Teardown Test VM (Always Runs)
+      if: always()
+      shell: bash
+      env:
+        VM_TEST_NAME: "control-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        gcloud compute instances delete "${VM_TEST_NAME}" \
+          --zone="${REGION}-${ZONE}" \
+          --quiet || true
