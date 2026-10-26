@@ -41,6 +41,7 @@ jobs:
 
   ingest-verify-vm:
     needs: [ingest-verify-rust]
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -60,6 +61,7 @@ jobs:
 
   worker-verify-vm:
     needs: [worker-verify-rust]
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -69,6 +71,7 @@ jobs:
         uses: ./.github/actions/worker/worker-verify-vm
 
   control-verify-vm:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -88,7 +91,7 @@ jobs:
   
   # DEPLOYMENT (on push)
   infra-apply:
-    needs: [python, ingest-verify-rust, ingest-verify-vm, worker-verify-rust, worker-verify-vm, control-verify-vm, infra-plan]
+    needs: [python, ingest-verify-rust, worker-verify-rust, infra-plan]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
