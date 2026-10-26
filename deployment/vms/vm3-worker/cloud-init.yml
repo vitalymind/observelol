@@ -1,0 +1,35 @@
+#cloud-config
+
+write_files:
+  - path: /etc/systemd/system/observelol.service
+    permissions: "0644"
+    owner: root
+    content: |
+      [Unit]
+      Description=ObserveLoL Worker Docker Compose Stack
+      After=docker.service network-online.target
+      Requires=docker.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      WorkingDirectory=/var/lib/observelol
+      Environment="HOME=/home/chronos"
+      # 1. Configure Artifact Registry auth for host Docker daemon
+      ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries=${region}-docker.pkg.dev
+      # 2. Pull Worker image using host Docker CLI (which has docker-credential-gcr)
+      ExecStartPre=-/bin/sh -c 'set -a; [ -f /var/lib/observelol/.env ] && . /var/lib/observelol/.env; set +a; [ -n "$$WORKER_IMAGE" ] && /usr/bin/docker pull "$$WORKER_IMAGE"'
+      # 3. Run docker compose via official docker:cli image
+      ExecStart=/usr/bin/docker run --rm \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        -v /var/lib/observelol:/var/lib/observelol \
+        -w /var/lib/observelol \
+        docker:cli compose up -d --remove-orphans
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - mkdir -p /var/lib/observelol
+  - systemctl daemon-reload
+  - systemctl enable observelol.service

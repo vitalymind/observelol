@@ -1,0 +1,26 @@
+services:
+  worker:
+    image: ${WORKER_IMAGE}
+    restart: unless-stopped
+    deploy:
+      replicas: ${WORKER_REPLICAS}
+    environment:
+      REDIS_URL: "redis://${REDIS_HOST}:${REDIS_PORT}"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://${CONTROL_HOST}:${OTEL_GRPC_PORT}"
+      DB_MODE: "${DB_MODE}"
+      DATABASE_URL: "${DATABASE_URL:-}"
+      WORKER_BATCH_SIZE: "${WORKER_BATCH_SIZE}"
+      WORKER_BLOCK_MS: "${WORKER_BLOCK_MS}"
+      WORKER_AUTOCLAIM_IDLE_MS: "${WORKER_AUTOCLAIM_IDLE_MS}"
+      WORKER_ZSTD_LEVEL: "${WORKER_ZSTD_LEVEL}"
+
+  node-exporter:
+    image: ${NODE_EXPORTER_IMAGE}
+    container_name: observelol-node-exporter
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - /:/host:ro,rslave
