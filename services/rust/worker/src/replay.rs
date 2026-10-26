@@ -80,8 +80,7 @@ impl ValidationError {
             | Self::MissingGameEnds
             | Self::EventAfterGameEnds => None,
 
-            Self::CorruptedEvent(err)
-            | Self::CompressionFailed(err) => {
+            Self::CorruptedEvent(err) | Self::CompressionFailed(err) => {
                 let clamped: String = err.chars().take(255).collect();
                 Some(serde_json::json!({ "lib_err": clamped }))
             }
