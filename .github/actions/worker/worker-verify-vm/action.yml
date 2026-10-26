@@ -31,20 +31,28 @@ runs:
     - name: Configure Docker for Artifact Registry
       shell: bash
       run: |
-        gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+        gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin "${REGION}-docker.pkg.dev"
 
-    - name: Build and push Worker test image
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Set test image tag
       shell: bash
       run: |
-        TEST_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${PROJECT_ID}/worker:test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-        echo "TEST_IMAGE=$TEST_IMAGE" >> "$GITHUB_ENV"
-        docker build \
-          --build-arg RUST_BUILDER_IMAGE="$RUST_BUILDER" \
-          --build-arg DEBIAN_RUNTIME_IMAGE="$DEBIAN_RUNTIME" \
-          -f services/rust/worker/Dockerfile \
-          -t "$TEST_IMAGE" \
-          services/rust
-        docker push "$TEST_IMAGE"
+        echo "TEST_IMAGE=${REGION}-docker.pkg.dev/${PROJECT_ID}/${PROJECT_ID}/worker:test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_ENV"
+    
+    - name: Build and push Worker test image
+      uses: docker/build-push-action@v6
+      with:
+        context: services/rust
+        file: services/rust/worker/Dockerfile
+        push: true
+        tags: ${{ env.TEST_IMAGE }}
+        build-args: |
+          RUST_BUILDER_IMAGE=${{ env.RUST_BUILDER }}
+          DEBIAN_RUNTIME_IMAGE=${{ env.DEBIAN_RUNTIME }}
+        cache-from: type=gha,scope=worker
+        cache-to: type=gha,mode=max,scope=worker
 
     - name: Create Ephemeral Test VM
       shell: bash
