@@ -21,7 +21,8 @@ use crate::{
 #[tokio::main]
 async fn main() {
     let config = WorkerConfig::from_env();
-    let (tracer_provider, meter_provider) = init_telemetry(&config.otel_endpoint);
+    let (tracer_provider, meter_provider) =
+        init_telemetry(&config.otel_endpoint, &config.consumer_name);
 
     info!(
         consumer = %config.consumer_name,

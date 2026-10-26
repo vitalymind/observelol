@@ -1,5 +1,5 @@
 use opentelemetry::{
-    global,
+    KeyValue, global,
     metrics::{Counter, Histogram},
     trace::TracerProvider as _,
 };
@@ -55,9 +55,16 @@ impl WorkerMetrics {
     }
 }
 
-pub fn init_telemetry(otel_endpoint: &str) -> (SdkTracerProvider, SdkMeterProvider) {
+pub fn init_telemetry(
+    otel_endpoint: &str,
+    instance_id: &str,
+) -> (SdkTracerProvider, SdkMeterProvider) {
     let resource = Resource::builder()
         .with_service_name("observelol-worker")
+        .with_attribute(KeyValue::new(
+            "service.instance.id",
+            instance_id.to_string(),
+        ))
         .build();
 
     let span_exporter = opentelemetry_otlp::SpanExporter::builder()

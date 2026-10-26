@@ -10,8 +10,10 @@ services:
       INGEST_HOST: "${INGEST_HOST}"
       CONTROL_HOST: "${CONTROL_HOST}"
       WORKER_HOST: "${WORKER_HOST}"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/observelol.json"
     volumes:
       - ./otel-collector-config.yml:/otel-lgtm/otelcol-config.yaml:ro
+      - ./dashboard.json:/var/lib/grafana/dashboards/observelol.json:ro
 
   node-exporter:
     image: ${NODE_EXPORTER_IMAGE}
