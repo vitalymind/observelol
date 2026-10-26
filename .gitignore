@@ -8,3 +8,4 @@ __pycache__/
 /BOT.txt
 certs/
 *.pem
+*.txt

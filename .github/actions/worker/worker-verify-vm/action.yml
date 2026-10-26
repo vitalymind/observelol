@@ -1,0 +1,134 @@
+name: "Worker Verify VM"
+description: "Builds test Worker image, provisions an ephemeral COS VM in GCP, deploys stack, verifies consumer registration & node-exporter, and destroys VM"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load config variables
+      uses: ./.github/actions/helpers/load-config
+      with:
+        mappings: |
+          REGION=.GCP_REGION
+          ZONE=.infra_definitions.zone
+          IMAGE=.infra_definitions.worker_vm.image
+          MACHINE_TYPE=.infra_definitions.worker_vm.type
+          SUBNET=.infra_definitions.subnet
+          VM_SA=.GCP_VM_SA_NAME
+          PROJECT_ID=.GCP_PROJECT_ID
+          RUST_BUILDER=.container_images.rust_builder
+          DEBIAN_RUNTIME=.container_images.debian_runtime
+          REDIS_IMAGE=.container_images.redis
+
+    - name: Load GCP OIDC configuration
+      uses: ./.github/actions/helpers/load-oidc-config
+
+    - name: Authenticate to Google Cloud (OIDC)
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+    - name: Configure Docker for Artifact Registry
+      shell: bash
+      run: |
+        gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+    - name: Build and push Worker test image
+      shell: bash
+      run: |
+        TEST_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${PROJECT_ID}/worker:test-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+        echo "TEST_IMAGE=$TEST_IMAGE" >> "$GITHUB_ENV"
+        docker build \
+          --build-arg RUST_BUILDER_IMAGE="$RUST_BUILDER" \
+          --build-arg DEBIAN_RUNTIME_IMAGE="$DEBIAN_RUNTIME" \
+          -f services/rust/worker/Dockerfile \
+          -t "$TEST_IMAGE" \
+          services/rust
+        docker push "$TEST_IMAGE"
+
+    - name: Create Ephemeral Test VM
+      shell: bash
+      env:
+        VM_TEST_NAME: "worker-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        sed "s/\${region}/${REGION}/g" deployment/vms/vm3-worker/cloud-init.yml > /tmp/rendered-worker-cloud-init.yml
+
+        IMAGE_PROJECT="${IMAGE%%/*}"
+        IMAGE_FAMILY="${IMAGE##*/}"
+
+        gcloud compute instances create "${VM_TEST_NAME}" \
+          --zone="${REGION}-${ZONE}" \
+          --machine-type="${MACHINE_TYPE}" \
+          --provisioning-model=SPOT \
+          --image-project="${IMAGE_PROJECT}" \
+          --image-family="${IMAGE_FAMILY}" \
+          --subnet="${SUBNET}" \
+          --service-account="${VM_SA}@${PROJECT_ID}.iam.gserviceaccount.com" \
+          --scopes=cloud-platform \
+          --metadata-from-file=user-data=/tmp/rendered-worker-cloud-init.yml
+
+    - name: Wait for VM SSH and start local Redis for smoke test
+      shell: bash
+      env:
+        VM_TEST_NAME: "worker-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        for i in {1..24}; do
+          if gcloud compute ssh "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --tunnel-through-iap --command="echo ready" --quiet; then
+            break
+          fi
+          echo "Waiting for VM SSH... ($i/24)"
+          sleep 5
+        done
+
+        gcloud compute ssh "${VM_TEST_NAME}" \
+          --zone="${REGION}-${ZONE}" \
+          --tunnel-through-iap \
+          --command="sudo iptables -I INPUT -p tcp --dport 6379 -j ACCEPT && sudo docker run -d --name test-redis --network host ${REDIS_IMAGE} redis-server --bind 0.0.0.0 --protected-mode no"
+
+        TEST_VM_IP=$(gcloud compute instances describe "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --format="value(networkInterfaces[0].networkIP)")
+        echo "TEST_VM_IP=$TEST_VM_IP" >> "$GITHUB_ENV"
+
+    - name: Deploy Worker Stack to Test VM
+      uses: ./.github/actions/worker/worker-apply
+      with:
+        vm_name: "worker-test-${{ github.run_id }}-${{ github.run_attempt }}"
+        worker_image: ${{ env.TEST_IMAGE }}
+        redis_host: ${{ env.TEST_VM_IP }}
+        control_host: "127.0.0.1"
+
+    - name: Smoke test Verify Worker consumer group registration in Redis
+      shell: bash
+      env:
+        VM_TEST_NAME: "worker-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        for i in {1..12}; do
+          if gcloud compute ssh "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --tunnel-through-iap --command="sudo docker exec test-redis redis-cli XINFO GROUPS ready_games | grep -q workers"; then
+            echo "Worker consumer group 'workers' verified on stream 'ready_games'"
+            exit 0
+          fi
+          echo "Waiting for worker consumer group registration... ($i/12)"
+          sleep 2
+        done
+        echo "Worker failed to register consumer group in Redis"
+        exit 1
+
+    - name: Smoke test Verify node-exporter metrics
+      shell: bash
+      env:
+        VM_TEST_NAME: "worker-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        gcloud compute ssh "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --tunnel-through-iap --command="curl -f -s http://127.0.0.1:9100/metrics > /dev/null"
+
+    - name: Teardown Test VM and Artifacts (Always Runs)
+      if: always()
+      shell: bash
+      env:
+        VM_TEST_NAME: "worker-test-${{ github.run_id }}-${{ github.run_attempt }}"
+      run: |
+        gcloud compute instances delete "${VM_TEST_NAME}" \
+          --zone="${REGION}-${ZONE}" \
+          --quiet || true
+
+        if [ -n "${TEST_IMAGE}" ]; then
+          gcloud artifacts docker images delete "${TEST_IMAGE}" --quiet --delete-tags || true
+        fi

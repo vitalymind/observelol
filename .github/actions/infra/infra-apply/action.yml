@@ -2,6 +2,9 @@ name: "Infrastructure Apply"
 description: "Applies OpenTofu infrastructure to GCP and exports key outputs"
 
 outputs:
+  vm1_internal_ip:
+    description: "Internal VPC IP of VM1 (ingest/Redis)"
+    value: ${{ steps.tf-outputs.outputs.vm1_internal_ip }}
   vm2_internal_ip:
     description: "Internal VPC IP of VM2 (control)"
     value: ${{ steps.tf-outputs.outputs.vm2_internal_ip }}
@@ -47,6 +50,7 @@ runs:
       shell: bash
       working-directory: deployment/infra
       run: |
+        echo "vm1_internal_ip=$(tofu output -raw vm1_internal_ip)" >> "$GITHUB_OUTPUT"
         echo "vm2_internal_ip=$(tofu output -raw vm2_internal_ip)" >> "$GITHUB_OUTPUT"
         echo "artifact_registry_url=$(tofu output -raw artifact_registry_url)" >> "$GITHUB_OUTPUT"
 
