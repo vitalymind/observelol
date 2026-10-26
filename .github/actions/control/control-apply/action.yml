@@ -1,0 +1,61 @@
+name: "Control Apply"
+description: "Renders .env, copies files to target Control VM, and restarts observelol.service"
+
+inputs:
+  vm_name:
+    description: "Name of target GCE VM"
+    required: true
+  ingest_host:
+    description: "Ingest VM internal IP (or 127.0.0.1 for test)"
+    required: true
+  control_host:
+    description: "Control VM internal IP (or 127.0.0.1 for test)"
+    required: true
+  worker_host:
+    description: "Worker VM internal IP (or 127.0.0.1 for test)"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load config variables
+      uses: ./.github/actions/helpers/load-config
+      with:
+        mappings: |
+          REGION=.GCP_REGION
+          ZONE=.infra_definitions.zone
+
+    - name: Render .env on runner
+      uses: ./.github/actions/helpers/render-env
+      with:
+        output_file: deployment/vms/vm2-control/.env
+        mappings: |
+          OTEL_LGTM_IMAGE=.container_images.otel_lgtm
+          NODE_EXPORTER_IMAGE=.container_images.node_exporter
+          OTEL_GRPC_PORT=.ingest_config.otel_grpc_port
+        vars: |
+          INGEST_HOST=${{ inputs.ingest_host }}
+          CONTROL_HOST=${{ inputs.control_host }}
+          WORKER_HOST=${{ inputs.worker_host }}
+
+    - name: Copy files to VM
+      shell: bash
+      run: |
+        gcloud compute ssh "${{ inputs.vm_name }}" \
+          --zone="${REGION}-${ZONE}" \
+          --tunnel-through-iap \
+          --command="mkdir -p /tmp/observelol"
+        shopt -s dotglob
+        gcloud compute scp --recurse \
+          deployment/vms/vm2-control/* \
+          "${{ inputs.vm_name }}:/tmp/observelol/" \
+          --zone="${REGION}-${ZONE}" \
+          --tunnel-through-iap
+
+    - name: Apply Docker Compose on VM
+      shell: bash
+      run: |
+        gcloud compute ssh "${{ inputs.vm_name }}" \
+          --zone="${REGION}-${ZONE}" \
+          --tunnel-through-iap \
+          --command="sudo mkdir -p /var/lib/observelol && sudo cp -r /tmp/observelol/. /var/lib/observelol/ && sudo rm -rf /tmp/observelol && sudo systemctl restart observelol.service"

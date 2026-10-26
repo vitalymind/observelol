@@ -1,0 +1,25 @@
+services:
+  otel-lgtm:
+    image: ${OTEL_LGTM_IMAGE}
+    container_name: observelol-otel-lgtm
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "${OTEL_GRPC_PORT}:4317"
+    environment:
+      INGEST_HOST: "${INGEST_HOST}"
+      CONTROL_HOST: "${CONTROL_HOST}"
+      WORKER_HOST: "${WORKER_HOST}"
+    volumes:
+      - ./otel-collector-config.yml:/otel-lgtm/otelcol-config.yaml:ro
+
+  node-exporter:
+    image: ${NODE_EXPORTER_IMAGE}
+    container_name: observelol-node-exporter
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command:
+      - "--path.rootfs=/host"
+    volumes:
+      - /:/host:ro,rslave

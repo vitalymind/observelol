@@ -1,0 +1,39 @@
+name: "Control Deploy"
+description: "Deploys telemetry stack to production VM2 (control)"
+
+inputs:
+  vm1_internal_ip:
+    description: "Internal VPC IP of VM1 (ingest) from OpenTofu output"
+    required: true
+  vm2_internal_ip:
+    description: "Internal VPC IP of VM2 (control) from OpenTofu output"
+    required: true
+  vm3_internal_ip:
+    description: "Internal VPC IP of VM3 (worker) from OpenTofu output"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load config variables
+      uses: ./.github/actions/helpers/load-config
+      with:
+        mappings: |
+          VM_NAME=.infra_definitions.control_vm.name
+
+    - name: Load GCP OIDC configuration from config.yml
+      uses: ./.github/actions/helpers/load-oidc-config
+
+    - name: Authenticate to Google Cloud (OIDC)
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+    - name: Deploy stack to Control VM
+      uses: ./.github/actions/control/control-apply
+      with:
+        vm_name: ${{ env.VM_NAME }}
+        ingest_host: ${{ inputs.vm1_internal_ip }}
+        control_host: ${{ inputs.vm2_internal_ip }}
+        worker_host: ${{ inputs.vm3_internal_ip }}

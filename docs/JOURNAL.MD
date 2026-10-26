@@ -45,3 +45,9 @@
 - Adding generated Rust implementation
 - Modify build actions to use GH cache
 - XGROUP CREATE is handled by Workers, not Dispatcher
+- Errors use error_code instead of text
+- Clean up and organization of Worker Rust code
+- Encodind/Decoding of replays are done according to protobuf schema
+- Making action files for contorl CI
+- Making deploy orchestration
+- configuring otel-lgtm
