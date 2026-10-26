@@ -44,3 +44,4 @@
 - Changed schema, added replay version
 - Adding generated Rust implementation
 - Modify build actions to use GH cache
+- XGROUP CREATE is handled by Workers, not Dispatcher

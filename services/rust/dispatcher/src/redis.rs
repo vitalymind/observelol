@@ -1,6 +1,5 @@
-use common::{ACTIVE_SNAPSHOT_KEY, READY_GAMES_STREAM, WORKERS_CONSUMER_GROUP, game_events_key};
+use common::{ACTIVE_SNAPSHOT_KEY, READY_GAMES_STREAM, game_events_key};
 use redis::{AsyncCommands, aio::ConnectionManager};
-use tracing::info;
 use uuid::Uuid;
 
 pub trait Storage: Clone + Send + Sync + 'static {
@@ -32,8 +31,7 @@ pub struct RedisStorage {
 impl RedisStorage {
     pub async fn connect(redis_url: &str, default_ttl_sec: u64) -> Result<Self, redis::RedisError> {
         let client = redis::Client::open(redis_url)?;
-        let mut redis = ConnectionManager::new(client).await?;
-        ensure_consumer_group(&mut redis).await;
+        let redis = ConnectionManager::new(client).await?;
 
         Ok(Self {
             redis,
@@ -90,34 +88,5 @@ impl Storage for RedisStorage {
             .await
             .map_err(|e| e.to_string())?;
         Ok(())
-    }
-}
-
-pub async fn ensure_consumer_group(redis: &mut ConnectionManager) {
-    let res: redis::RedisResult<()> = redis::cmd("XGROUP")
-        .arg("CREATE")
-        .arg(READY_GAMES_STREAM)
-        .arg(WORKERS_CONSUMER_GROUP)
-        .arg("0")
-        .arg("MKSTREAM")
-        .query_async(redis)
-        .await;
-
-    match res {
-        Ok(()) => info!(
-            stream = READY_GAMES_STREAM,
-            group = WORKERS_CONSUMER_GROUP,
-            "Created Redis consumer group"
-        ),
-        Err(err) if err.to_string().contains("BUSYGROUP") => {
-            info!(
-                stream = READY_GAMES_STREAM,
-                group = WORKERS_CONSUMER_GROUP,
-                "Redis consumer group already exists"
-            );
-        }
-        Err(err) => {
-            panic!("Failed to create Redis consumer group '{WORKERS_CONSUMER_GROUP}': {err}");
-        }
     }
 }
