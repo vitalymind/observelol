@@ -1,4 +1,10 @@
+# 22.10.2026
+- Figuring out overall architecture
+- Planning main project constraints
+- Ironing out project stack
+
 # 23.10.2026
+- Finalizing architecture
 - Created PAT in github
 - Enabled build and secret APIs in GCP
 - Write automation scripts for:
@@ -31,3 +37,11 @@
 - Removed LUA script, using rpush directly
 - Moved TTL management to Rust with dashmap
 - Several extra modifications, for faster hot loop
+
+# 26.10.2026
+- Added test and deploy actions for Worker
+- Added vm orchestration and infra definitions
+- Changed schema, added replay version
+- Adding generated Rust implementation
+- Modify build actions to use GH cache
+- XGROUP CREATE is handled by Workers, not Dispatcher

@@ -9,3 +9,4 @@ serde_json = { workspace = true }
 serde_repr = { workspace = true }
 uuid = { workspace = true }
 postcard = { workspace = true }
+prost = { workspace = true }

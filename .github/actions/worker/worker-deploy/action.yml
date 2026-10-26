@@ -1,0 +1,64 @@
+name: "Worker Build and Deploy"
+description: "Builds Worker image, pushes to Artifact Registry, and deploys configs to production VM3"
+
+inputs:
+  vm1_internal_ip:
+    description: "Internal VPC IP of VM1 (ingest/Redis) from OpenTofu output"
+    required: true
+  vm2_internal_ip:
+    description: "Internal VPC IP of VM2 (control) from OpenTofu output"
+    required: true
+  artifact_registry_url:
+    description: "Artifact Registry base URL from OpenTofu output"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Load config variables
+      uses: ./.github/actions/helpers/load-config
+      with:
+        mappings: |
+          RUST_BUILDER=.container_images.rust_builder
+          DEBIAN_RUNTIME=.container_images.debian_runtime
+          REGION=.GCP_REGION
+          VM_NAME=.infra_definitions.worker_vm.name
+
+    - name: Load GCP OIDC configuration from config.yml
+      uses: ./.github/actions/helpers/load-oidc-config
+
+    - name: Authenticate to Google Cloud (OIDC)
+      uses: google-github-actions/auth@v2
+      with:
+        workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+        service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+
+    - name: Configure Docker for Artifact Registry
+      shell: bash
+      run: |
+        gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin "${REGION}-docker.pkg.dev"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build and push Worker image to Artifact Registry
+      uses: docker/build-push-action@v6
+      with:
+        context: services/rust
+        file: services/rust/worker/Dockerfile
+        push: true
+        tags: |
+          ${{ inputs.artifact_registry_url }}/worker:${{ github.sha }}
+        build-args: |
+          RUST_BUILDER_IMAGE=${{ env.RUST_BUILDER }}
+          DEBIAN_RUNTIME_IMAGE=${{ env.DEBIAN_RUNTIME }}
+        cache-from: type=gha,scope=worker
+        cache-to: type=gha,mode=max,scope=worker
+
+    - name: Deploy stack to Worker VM
+      uses: ./.github/actions/worker/worker-apply
+      with:
+        vm_name: ${{ env.VM_NAME }}
+        worker_image: ${{ inputs.artifact_registry_url }}/worker:${{ github.sha }}
+        redis_host: ${{ inputs.vm1_internal_ip }}
+        control_host: ${{ inputs.vm2_internal_ip }}

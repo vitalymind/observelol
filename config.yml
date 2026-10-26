@@ -75,3 +75,13 @@ ingest_config:
   game_end_grace_ms: 1000
   control_port: 3000
   otel_grpc_port: 4317
+
+# Worker configuration
+worker_config:
+  replicas: 5
+  db_mode: "drop" #postgres, drop
+  redis_port: 6379
+  batch_size: 16
+  block_ms: 5000
+  autoclaim_threshold_ms: 30000
+  zstd_level: 3 #Replay compression

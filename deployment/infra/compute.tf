@@ -96,11 +96,18 @@ resource "google_compute_instance" "vm3_worker" {
 
   network_interface {
     subnetwork = google_compute_subnetwork.subnet.id
+    access_config {}
   }
 
   service_account {
     email  = "${local.vm_sa_name}@${local.project_id}.iam.gserviceaccount.com"
     scopes = ["cloud-platform"]
+  }
+
+  metadata = {
+    user-data = templatefile("${path.module}/../vms/vm3-worker/cloud-init.yml", {
+      region = local.region
+    })
   }
 
   desired_status            = "RUNNING"

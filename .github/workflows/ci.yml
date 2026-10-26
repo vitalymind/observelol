@@ -49,6 +49,25 @@ jobs:
       - name: Builds image, provision test VM and runs deploy
         uses: ./.github/actions/ingest/ingest-verify-vm
 
+  worker-verify-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Worker Rust Verify
+        uses: ./.github/actions/worker/worker-verify-rust
+
+  worker-verify-vm:
+    needs: [worker-verify-rust]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Builds worker image, provisions test VM and runs deploy
+        uses: ./.github/actions/worker/worker-verify-vm
+
   infra-plan:
     runs-on: ubuntu-latest
     steps:
@@ -60,10 +79,11 @@ jobs:
   
   # DEPLOYMENT (on push)
   infra-apply:
-    needs: [python, ingest-verify-rust, ingest-verify-vm, infra-plan]
+    needs: [python, ingest-verify-rust, ingest-verify-vm, worker-verify-rust, worker-verify-vm, infra-plan]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     outputs:
+      vm1_internal_ip: ${{ steps.infra-apply.outputs.vm1_internal_ip }}
       vm2_internal_ip: ${{ steps.infra-apply.outputs.vm2_internal_ip }}
       artifact_registry_url: ${{ steps.infra-apply.outputs.artifact_registry_url }}
     steps:
@@ -85,5 +105,20 @@ jobs:
       - name: Run Ingest Build and Deploy
         uses: ./.github/actions/ingest/ingest-deploy
         with:
+          vm2_internal_ip: ${{ needs.infra-apply.outputs.vm2_internal_ip }}
+          artifact_registry_url: ${{ needs.infra-apply.outputs.artifact_registry_url }}
+
+  worker-deploy:
+    needs: infra-apply
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Run Worker Build and Deploy
+        uses: ./.github/actions/worker/worker-deploy
+        with:
+          vm1_internal_ip: ${{ needs.infra-apply.outputs.vm1_internal_ip }}
           vm2_internal_ip: ${{ needs.infra-apply.outputs.vm2_internal_ip }}
           artifact_registry_url: ${{ needs.infra-apply.outputs.artifact_registry_url }}
