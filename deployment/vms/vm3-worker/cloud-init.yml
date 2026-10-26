@@ -9,6 +9,7 @@ write_files:
       Description=ObserveLoL Worker Docker Compose Stack
       After=docker.service network-online.target
       Requires=docker.service
+      ConditionPathExists=/var/lib/observelol/docker-compose.yml
 
       [Service]
       Type=oneshot
@@ -26,7 +27,7 @@ write_files:
         -v /var/run/docker.sock:/var/run/docker.sock \
         -v /var/lib/observelol:/var/lib/observelol \
         -w /var/lib/observelol \
-        docker:cli compose up -d --remove-orphans
+        docker:cli compose up -d --remove-orphans --force-recreate
 
       [Install]
       WantedBy=multi-user.target
@@ -34,4 +35,4 @@ write_files:
 runcmd:
   - mkdir -p /var/lib/observelol
   - systemctl daemon-reload
-  - systemctl enable observelol.service
+  - systemctl enable --now observelol.service

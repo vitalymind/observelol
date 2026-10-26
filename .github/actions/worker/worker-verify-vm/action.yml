@@ -75,7 +75,7 @@ runs:
           --scopes=cloud-platform \
           --metadata-from-file=user-data=/tmp/rendered-worker-cloud-init.yml
 
-    - name: Wait for VM SSH and start local Redis for smoke test
+    - name: Wait for VM SSH
       shell: bash
       env:
         VM_TEST_NAME: "worker-test-${{ github.run_id }}-${{ github.run_attempt }}"
@@ -88,11 +88,6 @@ runs:
           sleep 5
         done
 
-        gcloud compute ssh "${VM_TEST_NAME}" \
-          --zone="${REGION}-${ZONE}" \
-          --tunnel-through-iap \
-          --command="sudo iptables -I INPUT -p tcp --dport 6379 -j ACCEPT && sudo docker run -d --name test-redis --network host ${REDIS_IMAGE} redis-server --bind 0.0.0.0 --protected-mode no"
-
         TEST_VM_IP=$(gcloud compute instances describe "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --format="value(networkInterfaces[0].networkIP)")
         echo "TEST_VM_IP=$TEST_VM_IP" >> "$GITHUB_ENV"
 
@@ -104,11 +99,16 @@ runs:
         redis_host: ${{ env.TEST_VM_IP }}
         control_host: "127.0.0.1"
 
-    - name: Smoke test Verify Worker consumer group registration in Redis
+    - name: Start local Redis and verify Worker consumer group registration
       shell: bash
       env:
         VM_TEST_NAME: "worker-test-${{ github.run_id }}-${{ github.run_attempt }}"
       run: |
+        gcloud compute ssh "${VM_TEST_NAME}" \
+          --zone="${REGION}-${ZONE}" \
+          --tunnel-through-iap \
+          --command="sudo iptables -I INPUT -p tcp --dport 6379 -j ACCEPT && sudo docker run -d --name test-redis --network host ${REDIS_IMAGE} redis-server --bind 0.0.0.0 --protected-mode no"
+
         for i in {1..12}; do
           if gcloud compute ssh "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --tunnel-through-iap --command="sudo docker exec test-redis redis-cli XINFO GROUPS ready_games | grep -q workers"; then
             echo "Worker consumer group 'workers' verified on stream 'ready_games'"
