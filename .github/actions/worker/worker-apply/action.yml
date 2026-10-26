@@ -37,7 +37,7 @@ runs:
           REDIS_PORT=.worker_config.redis_port
           WORKER_BATCH_SIZE=.worker_config.batch_size
           WORKER_BLOCK_MS=.worker_config.block_ms
-          WORKER_AUTOCLAIM_IDLE_MS=.worker_config.autoclaim_idle_ms
+          WORKER_AUTOCLAIM_THRESHOLD_MS=.worker_config.autoclaim_threshold_ms
           WORKER_ZSTD_LEVEL=.worker_config.zstd_level
         vars: |
           WORKER_IMAGE=${{ inputs.worker_image }}

@@ -83,5 +83,5 @@ worker_config:
   redis_port: 6379
   batch_size: 16
   block_ms: 5000
-  autoclaim_idle_ms: 30000
+  autoclaim_threshold_ms: 30000
   zstd_level: 3 #Replay compression
