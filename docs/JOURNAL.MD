@@ -51,3 +51,6 @@
 - Making action files for contorl CI
 - Making deploy orchestration
 - configuring otel-lgtm
+- Added bare bone control with otel-lgtm stack
+- Added simulation scripts
+- Added grafana dashboard
