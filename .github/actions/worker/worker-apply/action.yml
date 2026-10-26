@@ -1,5 +1,5 @@
 name: "Worker Apply"
-description: "Renders .env, copies files to target Worker VM, and restarts observelol.service"
+description: "Renders .env, copies files to target Worker VM, and reboots VM to start observelol.service"
 
 inputs:
   vm_name:
@@ -58,10 +58,35 @@ runs:
           --zone="${REGION}-${ZONE}" \
           --tunnel-through-iap
 
-    - name: Apply Docker Compose on VM
+    - name: Apply files and reboot VM
       shell: bash
       run: |
+        OLD_BOOT_ID=$(gcloud compute ssh "${{ inputs.vm_name }}" \
+          --zone="${REGION}-${ZONE}" \
+          --tunnel-through-iap \
+          --command="cat /proc/sys/kernel/random/boot_id" | tr -d '\r\n')
+
         gcloud compute ssh "${{ inputs.vm_name }}" \
           --zone="${REGION}-${ZONE}" \
           --tunnel-through-iap \
-          --command="sudo mkdir -p /var/lib/observelol && sudo cp -r /tmp/observelol/. /var/lib/observelol/ && sudo rm -rf /tmp/observelol && sudo systemctl restart observelol.service"
+          --command="sudo mkdir -p /var/lib/observelol && sudo cp -r /tmp/observelol/. /var/lib/observelol/ && sudo rm -rf /tmp/observelol && sudo sync"
+
+        gcloud compute ssh "${{ inputs.vm_name }}" \
+          --zone="${REGION}-${ZONE}" \
+          --tunnel-through-iap \
+          --command="sudo systemctl --no-block reboot" || true
+
+        for i in {1..30}; do
+          sleep 5
+          if gcloud compute ssh "${{ inputs.vm_name }}" \
+            --zone="${REGION}-${ZONE}" \
+            --tunnel-through-iap \
+            --quiet \
+            --command="[ \"\$(cat /proc/sys/kernel/random/boot_id)\" != \"${OLD_BOOT_ID}\" ] && systemctl is-active --quiet observelol.service"; then
+            echo "VM rebooted and observelol.service is active"
+            exit 0
+          fi
+          echo "Waiting for VM reboot and observelol.service... ($i/30)"
+        done
+        echo "Timed out waiting for VM to reboot and start observelol.service"
+        exit 1
