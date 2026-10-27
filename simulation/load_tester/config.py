@@ -39,7 +39,7 @@ class SimulationConfig:
     min_game_duration_sec: int = 45
     max_game_duration_sec: int = 75
     initial_delay_pct: int = 100
-    game_events_target: int = 100
+    events_per_minute: int = 60
     min_items_per_hero: int = 0
     max_items_per_hero: int = 6
     error_rates: Dict[str, int] = field(
@@ -58,7 +58,7 @@ class SimulationConfig:
             )
 
         self.initial_delay_pct = max(0, min(100, int(round(float(self.initial_delay_pct)))))
-        self.game_events_target = max(0, min(50_000, int(self.game_events_target)))
+        self.events_per_minute = max(0, min(50_000, int(self.events_per_minute)))
 
         self.min_items_per_hero = max(0, min(6, int(self.min_items_per_hero)))
         self.max_items_per_hero = max(0, min(6, int(self.max_items_per_hero)))
@@ -85,9 +85,11 @@ class SimulationConfig:
 
     def calculate_estimates(self) -> Dict[str, Any]:
         avg_duration = self.avg_game_duration_sec
-        avg_action_events = self.game_events_target * 0.975
+        avg_action_events = (self.events_per_minute / 60.0) * avg_duration * 0.975
         avg_total_requests = LIFECYCLE_REQUESTS_PER_GAME + avg_action_events
         estimated_rps = (self.producers * avg_total_requests) / avg_duration
+        estimated_rps_per_producer = avg_total_requests / avg_duration
+        in_game_rps_per_producer = (self.events_per_minute / 60.0) * 0.975
         games_per_minute = (self.producers * 60.0) / avg_duration
 
         return {
@@ -99,6 +101,8 @@ class SimulationConfig:
             "avg_action_events_per_game": round(avg_action_events, 1),
             "avg_total_requests_per_game": round(avg_total_requests, 1),
             "estimated_rps": round(estimated_rps, 2),
+            "estimated_rps_per_producer": round(estimated_rps_per_producer, 2),
+            "in_game_rps_per_producer": round(in_game_rps_per_producer, 2),
             "games_per_minute": round(games_per_minute, 2),
         }
 
@@ -116,12 +120,15 @@ class SimulationConfig:
             "min_game_duration_sec",
             "max_game_duration_sec",
             "initial_delay_pct",
-            "game_events_target",
+            "events_per_minute",
             "min_items_per_hero",
             "max_items_per_hero",
         ):
             if key in payload and payload[key] is not None:
                 current[key] = payload[key]
+
+        if "events_per_minute" not in payload and "game_events_target" in payload and payload["game_events_target"] is not None:
+            current["events_per_minute"] = payload["game_events_target"]
 
         if "error_rates" in payload and isinstance(payload["error_rates"], dict):
             merged_errors = dict(current["error_rates"])

@@ -39,9 +39,9 @@ class TestSimulationGenerator(unittest.TestCase):
 
     def test_valid_game_timeline_invariants(self) -> None:
         cfg = SimulationConfig(
-            min_game_duration_sec=30,
+            min_game_duration_sec=60,
             max_game_duration_sec=60,
-            game_events_target=100,
+            events_per_minute=60,
             min_items_per_hero=1,
             max_items_per_hero=3,
         )
@@ -50,14 +50,14 @@ class TestSimulationGenerator(unittest.TestCase):
 
         self.assertEqual(injected, [])
         # 13 mandatory events + 95..100 action events
-        self.assertGreaterEqual(len(timeline), 13 + 95)
-        self.assertLessEqual(len(timeline), 13 + 100)
+        self.assertGreaterEqual(len(timeline), 13 + 57)
+        self.assertLessEqual(len(timeline), 13 + 60)
 
         # Starts with GameStarted at index 0, ends with GameEnds within [30_000, 60_000] ms
         self.assertEqual(timeline[0].wire["event_type"], EVENT_GAME_STARTED)
         self.assertEqual(timeline[0].wire["event_index"], 0)
         self.assertEqual(timeline[-1].wire["event_type"], EVENT_GAME_ENDS)
-        self.assertGreaterEqual(timeline[-1].wire["timestamp_ms"], 30_000)
+        self.assertGreaterEqual(timeline[-1].wire["timestamp_ms"], 60_000)
         self.assertLessEqual(timeline[-1].wire["timestamp_ms"], 60_000)
 
         # Contiguous indices and monotonic timestamps
@@ -67,12 +67,46 @@ class TestSimulationGenerator(unittest.TestCase):
             self.assertGreaterEqual(ev.wire["timestamp_ms"], prev_ts)
             prev_ts = ev.wire["timestamp_ms"]
 
+    def test_events_per_minute_scaling_and_estimates(self) -> None:
+        cfg = SimulationConfig(
+            producers=10,
+            min_game_duration_sec=30,
+            max_game_duration_sec=30,
+            events_per_minute=120,
+        )
+        game_id = str(uuid4())
+        timeline, injected = generate_game_plan(game_id, None, cfg)
+        self.assertEqual(injected, [])
+
+        # 30s game @ 120 EPM -> base = 60 events, 95% = 57..60 action events + 13 lifecycle
+        action_events = [
+            ev for ev in timeline
+            if ev.wire["event_type"] not in (
+                EVENT_GAME_STARTED,
+                EVENT_HERO_SELECTED,
+                EVENT_ROUND_START,
+                EVENT_GAME_ENDS,
+            )
+        ]
+        self.assertGreaterEqual(len(action_events), 57)
+        self.assertLessEqual(len(action_events), 60)
+
+        # Estimates
+        est = cfg.calculate_estimates()
+        # In-game RPS per producer = (120 / 60) * 0.975 = 1.95
+        self.assertEqual(est["in_game_rps_per_producer"], 1.95)
+        # avg total requests = 14 lifecycle + 58.5 avg action = 72.5
+        self.assertEqual(est["avg_total_requests_per_game"], 72.5)
+        # estimated total rps = 10 producers * 72.5 / 30 = 24.17
+        self.assertEqual(est["estimated_rps"], 24.17)
+        self.assertEqual(est["estimated_rps_per_producer"], 2.42)
+
     def test_each_error_injection_independently(self) -> None:
         for code in ERROR_CODES:
             cfg = SimulationConfig(
                 min_game_duration_sec=45,
                 max_game_duration_sec=75,
-                game_events_target=40,
+                events_per_minute=40,
                 error_rates={c: (100 if c == code else 0) for c in ERROR_CODES},
             )
             timeline, injected = generate_game_plan(str(uuid4()), None, cfg)
@@ -190,7 +224,7 @@ class TestControllerAndEndToEnd(unittest.TestCase):
                     "producers": 2,
                     "min_game_duration_sec": 30,
                     "max_game_duration_sec": 30,
-                    "game_events_target": 20,
+                    "events_per_minute": 60,
                     "min_items_per_hero": 0,
                     "max_items_per_hero": 1,
                 },

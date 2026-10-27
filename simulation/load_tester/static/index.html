@@ -416,6 +416,7 @@
       <div class="estimate-item">
         <div class="label">Estimated RPS</div>
         <div class="val" id="estRps">0.00</div>
+        <div class="hint" id="estRpsSub" style="color: #7dd3fc; font-family: var(--mono); font-size: 0.72rem;">0.00 / producer</div>
       </div>
       <div class="estimate-item">
         <div class="label">Games Per Minute (GPM)</div>
@@ -492,12 +493,12 @@
 
           <div class="form-row">
             <div class="form-group">
-              <label for="gameEventsTarget">
-                <span>Game Events Target (Max)</span>
-                <span class="hint" id="eventsRangeHint">Runtime: 95–100</span>
+              <label for="eventsPerMinute">
+                <span>Events / Min (per Producer)</span>
+                <span class="hint" id="eventsRateHint">1.00 RPS/prod</span>
               </label>
-              <input type="number" id="gameEventsTarget" min="0" max="50000" step="1" value="100" oninput="recalcEstimates()" />
-              <span class="hint">Kills, LevelUps & Items (95%–100% rolled per game)</span>
+              <input type="number" id="eventsPerMinute" min="0" max="50000" step="1" value="60" oninput="recalcEstimates()" />
+              <span class="hint" id="eventsRangeHint">Runtime: ~57–60 in-game events / game</span>
             </div>
 
             <div class="form-group">
@@ -805,7 +806,7 @@
       const initialDelayPct = Math.max(0, Math.min(100, Math.round(Number(document.getElementById("initialDelayPct").value) || 0)));
       const maxInitialDelaySec = minDurationSec * (initialDelayPct / 100.0);
       const avgDurationSec = (minDurationSec + maxDurationSec) / 2.0;
-      const eventsTarget = Math.max(0, Number(document.getElementById("gameEventsTarget").value) || 0);
+      const epm = Math.max(0, Number(document.getElementById("eventsPerMinute").value) || 0);
 
       document.getElementById("minDurationText").textContent = `${minDurationSec}s`;
       document.getElementById("maxDurationText").textContent = `${maxDurationSec}s`;
@@ -820,15 +821,29 @@
       document.getElementById("heroSelectBadge").textContent = `Hero Select: ${heroSelectSec}s`;
       document.getElementById("estHeroSelect").textContent = `${heroSelectSec}s`;
 
-      const minEvents = Math.floor(eventsTarget * 0.95);
-      document.getElementById("eventsRangeHint").textContent = `Runtime: ${minEvents}–${eventsTarget}`;
+      const inGameRpsPerProd = epm / 60.0;
+      const rateHintEl = document.getElementById("eventsRateHint");
+      if (rateHintEl) {
+        rateHintEl.textContent = `${inGameRpsPerProd.toFixed(2)} RPS/prod`;
+      }
+      const avgBaseEvents = inGameRpsPerProd * avgDurationSec;
+      const minEvents = Math.floor(avgBaseEvents * 0.95);
+      const maxEvents = Math.ceil(avgBaseEvents);
+      document.getElementById("eventsRangeHint").textContent = `Runtime: ~${minEvents}–${maxEvents} in-game events / game`;
+      const avgActionEvents = avgBaseEvents * 0.975;
 
-      const avgActionEvents = eventsTarget * 0.975;
+
+
       const avgTotalRequests = 14 + avgActionEvents; // 1 GET + 13 lifecycle POST + action events
       const estRps = (producers * avgTotalRequests) / avgDurationSec;
       const estGpm = (producers * 60) / avgDurationSec;
 
       document.getElementById("estRps").textContent = estRps.toFixed(2);
+      const estRpsSubEl = document.getElementById("estRpsSub");
+      if (estRpsSubEl) {
+        const estRpsPerProd = avgTotalRequests / avgDurationSec;
+        estRpsSubEl.textContent = `${estRpsPerProd.toFixed(2)} / producer`;
+      }
       document.getElementById("estGpm").textContent = estGpm.toFixed(2);
       document.getElementById("estAvgReqs").textContent = avgTotalRequests.toFixed(1);
       if (lastProducerStates.length === 0) {
@@ -849,7 +864,7 @@
         min_game_duration_sec: Number(document.getElementById("minGameDuration").value) || 45,
         max_game_duration_sec: Number(document.getElementById("maxGameDuration").value) || 75,
         initial_delay_pct: Math.max(0, Math.min(100, Math.round(Number(document.getElementById("initialDelayPct").value) || 0))),
-        game_events_target: Number(document.getElementById("gameEventsTarget").value) || 0,
+        events_per_minute: Number(document.getElementById("eventsPerMinute").value) || 0,
         min_items_per_hero: Number(document.getElementById("minItems").value) || 0,
         max_items_per_hero: Number(document.getElementById("maxItems").value) || 0,
         error_rates: errorRates
@@ -863,7 +878,7 @@
       document.getElementById("minGameDuration").value = cfg.min_game_duration_sec ?? 45;
       document.getElementById("maxGameDuration").value = cfg.max_game_duration_sec ?? 75;
       document.getElementById("initialDelayPct").value = cfg.initial_delay_pct ?? 100;
-      document.getElementById("gameEventsTarget").value = cfg.game_events_target ?? 100;
+      document.getElementById("eventsPerMinute").value = cfg.events_per_minute ?? cfg.game_events_target ?? 60;
       document.getElementById("minItems").value = cfg.min_items_per_hero ?? 0;
       document.getElementById("maxItems").value = cfg.max_items_per_hero ?? 6;
 
