@@ -617,6 +617,26 @@
             </table>
           </div>
         </div>
+
+    <!-- Live Producer Swarm Matrix (500–1000 Producers) -->
+    <div class="card" id="producerMatrixCard">
+      <div class="card-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <h2>4. Producer Swarm Matrix</h2>
+          <span id="matrixCountBadge" class="step-pill">0 Producers</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px; font-size: 0.74rem; font-family: var(--mono); color: var(--muted); flex-wrap: wrap;">
+          <span><span style="display:inline-block; width:8px; height:8px; background:#111827; border:1px solid #374151; vertical-align:middle; margin-right:4px;"></span>Start (Dark Gray)</span>
+          <span><span style="display:inline-block; width:8px; height:8px; background:#3b82f6; vertical-align:middle; margin-right:4px;"></span>Hero Select</span>
+          <span><span style="display:inline-block; width:8px; height:8px; background:#06b6d4; vertical-align:middle; margin-right:4px;"></span>In-Game</span>
+          <span><span style="display:inline-block; width:8px; height:8px; background:#e0f2fe; vertical-align:middle; margin-right:4px;"></span>Late Game</span>
+          <span><span style="display:inline-block; width:8px; height:8px; background:#ffffff; box-shadow:0 0 4px #ffffff; vertical-align:middle; margin-right:4px;"></span>Game End (Full White)</span>
+        </div>
+      </div>
+      <div id="canvasWrap" style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; max-height: 280px; overflow-y: auto;">
+        <canvas id="producerMatrixCanvas" style="display: block; width: 100%;"></canvas>
+      </div>
+    </div>
       </div>
     </div>
   </div>
@@ -632,6 +652,82 @@
       { code: "UNORDERED_TIMESTAMP", desc: "Send non-monotonic out-of-order timestamp_ms" },
       { code: "INVALID_SLOT", desc: "Send slot out of bounds (slot >= 10)" }
     ];
+
+    let lastProducerStates = [];
+
+    function getStageColor(progress) {
+      if (progress <= 0) return "#1e293b";
+      if (progress < 0.20) return "#3b82f6"; // Hero select (blue)
+      if (progress < 0.55) return "#06b6d4"; // In-game early/mid (cyan)
+      if (progress < 0.85) return "#38bdf8"; // Mid/late (sky blue)
+      if (progress < 0.98) return "#e0f2fe"; // Late game (ice pale blue)
+      return "#ffffff";                     // Game end (solid pure white)
+    }
+
+    function drawProducerMatrix(producerStates, targetCount) {
+      const canvas = document.getElementById("producerMatrixCanvas");
+      if (!canvas) return;
+
+      const states = (producerStates && producerStates.length > 0)
+        ? producerStates
+        : new Array(targetCount || 10).fill(0.0);
+
+      const badge = document.getElementById("matrixCountBadge");
+      if (badge) {
+        badge.textContent = `${states.length} Producers`;
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      const displayWidth = Math.floor(rect.width);
+      if (displayWidth <= 0) return;
+
+      const size = 10;
+      const gap = 3;
+      const step = size + gap;
+      const cols = Math.max(1, Math.floor(displayWidth / step));
+      const rows = Math.ceil(states.length / cols);
+      const neededHeight = Math.max(50, rows * step + 2);
+
+      if (canvas.style.height !== `${neededHeight}px`) {
+        canvas.style.height = `${neededHeight}px`;
+      }
+
+      canvas.width = displayWidth * window.devicePixelRatio;
+      canvas.height = neededHeight * window.devicePixelRatio;
+
+      const ctx = canvas.getContext("2d");
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+      ctx.clearRect(0, 0, displayWidth, neededHeight);
+
+      for (let i = 0; i < states.length; i++) {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const x = col * step;
+        const y = row * step;
+        const p = Math.max(0, Math.min(1.0, states[i]));
+
+        // Base empty indicator: dark gray with subtle border
+        ctx.fillStyle = "#111827";
+        ctx.fillRect(x, y, size, size);
+        ctx.strokeStyle = "#27272a";
+        ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+
+        if (p > 0) {
+          const color = getStageColor(p);
+          ctx.fillStyle = color;
+          if (p >= 0.98) {
+            // Full white solid square at game end
+            ctx.fillRect(x, y, size, size);
+            ctx.strokeStyle = "#ffffff";
+            ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+          } else {
+            // Vertical fill from bottom up
+            const fillH = Math.max(1, Math.round(p * size));
+            ctx.fillRect(x, y + size - fillH, size, fillH);
+          }
+        }
+      }
+    }
 
     const historyRps = [];
     const historyFailRps = [];
@@ -735,6 +831,9 @@
       document.getElementById("estRps").textContent = estRps.toFixed(2);
       document.getElementById("estGpm").textContent = estGpm.toFixed(2);
       document.getElementById("estAvgReqs").textContent = avgTotalRequests.toFixed(1);
+      if (lastProducerStates.length === 0) {
+        drawProducerMatrix([], producers);
+      }
     }
 
     function collectConfigPayload() {
@@ -824,6 +923,7 @@
       const data = await res.json();
       historyRps.length = 0;
       historyFailRps.length = 0;
+      lastProducerStates = [];
       if (data.telemetry) renderTelemetry(data.telemetry);
       flashStatus("Telemetry reset");
     }
@@ -894,6 +994,8 @@
       if (historyRps.length > MAX_HISTORY) historyRps.shift();
       if (historyFailRps.length > MAX_HISTORY) historyFailRps.shift();
       drawChart();
+      lastProducerStates = t.producer_states || [];
+      drawProducerMatrix(lastProducerStates, t.target_producers || Number(document.getElementById("producersCount").value) || 10);
     }
 
     function drawChart() {
@@ -984,7 +1086,34 @@
     }
 
     window.addEventListener("DOMContentLoaded", init);
-    window.addEventListener("resize", drawChart);
+    window.addEventListener("resize", () => {
+      drawChart();
+      drawProducerMatrix(lastProducerStates, Number(document.getElementById("producersCount").value) || 10);
+    });
+
+    // Tooltip for matrix hover
+    const matrixCanvas = document.getElementById("producerMatrixCanvas");
+    if (matrixCanvas) {
+      matrixCanvas.addEventListener("mousemove", (e) => {
+        const rect = matrixCanvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const size = 10, gap = 3, step = size + gap;
+        const cols = Math.max(1, Math.floor(rect.width / step));
+        const col = Math.floor(mouseX / step);
+        const row = Math.floor(mouseY / step);
+        const idx = row * cols + col;
+        const states = (lastProducerStates && lastProducerStates.length > 0)
+          ? lastProducerStates
+          : [];
+        if (idx >= 0 && idx < states.length) {
+          const pct = Math.round(states[idx] * 100);
+          matrixCanvas.title = `Producer #${idx + 1}: ${pct}%`;
+        } else {
+          matrixCanvas.title = "";
+        }
+      });
+    }
   </script>
 </body>
 </html>
