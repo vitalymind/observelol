@@ -5,9 +5,10 @@ use std::{
 
 use axum::{
     Json, Router,
-    extract::{DefaultBodyLimit, State},
-    http::StatusCode,
-    response::IntoResponse,
+    body::Body,
+    extract::{DefaultBodyLimit, Request, State},
+    http::{StatusCode, Uri, Version, header},
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
 use common::{EventType, IncomingEvent, NewGameResponse};
@@ -22,12 +23,20 @@ use crate::{
     telemetry::DispatcherMetrics,
 };
 
+pub type HttpClient =
+    hyper_util::client::legacy::Client<hyper_util::client::legacy::connect::HttpConnector, Body>;
+
+pub fn new_http_client() -> HttpClient {
+    hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http()
+}
+
 #[derive(Clone)]
 pub struct AppState<S: Storage> {
     pub storage: S,
     pub config: DispatcherConfig,
     pub metrics: Arc<DispatcherMetrics>,
     pub activity: Arc<DashMap<Uuid, Instant>>,
+    pub http_client: HttpClient,
 }
 
 pub fn build_router<S: Storage>(state: AppState<S>) -> Router {
@@ -38,6 +47,7 @@ pub fn build_router<S: Storage>(state: AppState<S>) -> Router {
             post(handle_event::<S>).layer(DefaultBodyLimit::max(4096)),
         )
         .route("/health", get(handle_health::<S>))
+        .fallback(handle_nginx_proxy::<S>)
         .with_state(state)
 }
 
@@ -191,6 +201,54 @@ async fn handle_health<S: Storage>(State(state): State<AppState<S>>) -> impl Int
     }
 }
 
+async fn handle_nginx_proxy<S: Storage>(
+    State(state): State<AppState<S>>,
+    mut req: Request,
+) -> Response {
+    let path_and_query = req
+        .uri()
+        .path_and_query()
+        .map(|pq| pq.as_str())
+        .unwrap_or("/");
+
+    let target_uri = format!(
+        "{}{}",
+        state.config.nginx_upstream_url.trim_end_matches('/'),
+        path_and_query
+    );
+
+    let uri: Uri = match target_uri.parse() {
+        Ok(u) => u,
+        Err(err) => {
+            error!(error = %err, %target_uri, "Invalid upstream URI for nginx proxy");
+            return StatusCode::BAD_GATEWAY.into_response();
+        }
+    };
+
+    let host_header = if !req.headers().contains_key(header::HOST) {
+        req.uri()
+            .authority()
+            .and_then(|auth| header::HeaderValue::from_str(auth.as_str()).ok())
+    } else {
+        None
+    };
+
+    if let Some(host_val) = host_header {
+        req.headers_mut().insert(header::HOST, host_val);
+    }
+
+    *req.uri_mut() = uri;
+    *req.version_mut() = Version::HTTP_11;
+
+    match state.http_client.request(req).await {
+        Ok(res) => res.map(Body::new),
+        Err(err) => {
+            warn!(error = %err, "Failed to proxy request to nginx upstream");
+            StatusCode::BAD_GATEWAY.into_response()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -262,13 +320,17 @@ mod tests {
             storage,
             config: DispatcherConfig {
                 redis_url: "mock://".into(),
-                socket_path: "/tmp/mock.sock".into(),
+                bind_addr: "127.0.0.1:0".into(),
+                tls_cert_path: "/tmp/cert.pem".into(),
+                tls_key_path: "/tmp/key.pem".into(),
+                nginx_upstream_url: "http://127.0.0.1:80".into(),
                 otel_endpoint: "http://mock".into(),
                 redis_event_ttl_sec: 1, // 1 second for fast test
                 game_end_grace_ms: 10,
             },
             metrics: Arc::new(DispatcherMetrics::new()),
             activity: Arc::new(DashMap::new()),
+            http_client: new_http_client(),
         }
     }
 
@@ -505,5 +567,33 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res2.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
+
+    #[tokio::test]
+    async fn test_fallback_proxies_to_nginx() {
+        let mock_nginx = Router::new().fallback(|| async { (StatusCode::OK, "ok\n") });
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let nginx_handle = tokio::spawn(async move {
+            let _ = axum::serve(listener, mock_nginx).await;
+        });
+
+        let mut state = test_state(MockStorage::default());
+        state.config.nginx_upstream_url = format!("http://{addr}");
+        let app = build_router(state);
+
+        let req = Request::builder()
+            .uri("/admin/dashboard")
+            .method("GET")
+            .body(Body::empty())
+            .unwrap();
+
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        let body_bytes = res.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&body_bytes[..], b"ok\n");
+
+        nginx_handle.abort();
     }
 }

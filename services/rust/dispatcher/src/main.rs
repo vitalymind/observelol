@@ -10,9 +10,9 @@ use dashmap::DashMap;
 
 use crate::{
     config::DispatcherConfig,
-    handlers::{AppState, build_router, spawn_reaper},
+    handlers::{AppState, build_router, new_http_client, spawn_reaper},
     redis::RedisStorage,
-    server::serve_unix_socket,
+    server::serve_tls,
     telemetry::{DispatcherMetrics, init_telemetry},
 };
 
@@ -30,12 +30,19 @@ async fn main() {
         config: config.clone(),
         metrics: Arc::new(DispatcherMetrics::new()),
         activity: Arc::new(DashMap::with_capacity(16_384)),
+        http_client: new_http_client(),
     };
 
     spawn_reaper(state.clone());
 
     let app = build_router(state);
-    serve_unix_socket(app, &config.socket_path).await;
+    serve_tls(
+        app,
+        &config.bind_addr,
+        &config.tls_cert_path,
+        &config.tls_key_path,
+    )
+    .await;
 
     let _ = tracer_provider.shutdown();
     let _ = meter_provider.shutdown();

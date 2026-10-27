@@ -3,14 +3,17 @@
 ## Producers
 Producers POST to /api/event/ and GET from /api/new-game/ via REST API.
 
-## Nginx (VM1)
-Traffic injested by nginx container connected via unix sockets to Rust dispatcher. Other then events traffic is routed to VM2 `control` app.
-
 ## Rust Dispatcher (VM1)
-Rust dispatcher doing following:
-- accepts all events answering with 200, stripping `game_id` from the payload and appending event to Redis (RPUSH to `game:{game_id}:events`) with safety TTL.
-- generates `game_id` (`UUIDv7`) in-memory and provides it along with item/hero snapshot (read from Redis) to Producers.
-- will check event type and on game end, it will spawn 1 second timeout with XADD ready_games * game_id {id} payload.
+Rust dispatcher is the public HTTPS entry point on port 443:
+- terminates TLS and maintains persistent HTTP/1.1 & HTTP/2 keep-alive connections.
+- accepts all `/api/event/` events answering with 200, stripping `game_id` from the payload and appending event to Redis (RPUSH to `game:{game_id}:events`) with safety TTL.
+- generates `game_id` (`UUIDv7`) in-memory on `/api/new-game/` and provides it along with item/hero snapshot (read from Redis) to Producers.
+- answers `/health` directly by pinging Redis.
+- checks event type and on game end, spawns a grace timeout with `XADD ready_games * game_id {id}` payload.
+- forwards all other traffic to the internal nginx container.
+
+## Nginx (VM1)
+Sits behind the Rust dispatcher and handles non-ingest traffic destined for the VM2 `control` app (currently returning a static `ok` response).
 
 ## Redis (VM1)
 Stores events (RPUSH) and manages Consumer Groups of workers.

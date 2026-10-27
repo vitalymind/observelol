@@ -12,29 +12,10 @@ services:
       - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
       - redis_sock:/var/run/redis
 
-  dispatcher:
-    image: ${DISPATCHER_IMAGE}
-    container_name: observelol-dispatcher
-    restart: unless-stopped
-    depends_on:
-      - redis
-    environment:
-      REDIS_URL: "unix:///var/run/redis/redis.sock"
-      DISPATCHER_SOCKET_PATH: "/var/run/dispatcher/dispatcher.sock"
-      OTEL_EXPORTER_OTLP_ENDPOINT: "http://${CONTROL_HOST}:${OTEL_GRPC_PORT}"
-      OTEL_METRIC_EXPORT_INTERVAL: "${OTEL_METRIC_EXPORT_INTERVAL}"
-      REDIS_EVENT_TTL_SEC: "${REDIS_EVENT_TTL_SEC}"
-      GAME_END_GRACE_MS: "${GAME_END_GRACE_MS}"
-    volumes:
-      - redis_sock:/var/run/redis
-      - dispatcher_sock:/var/run/dispatcher
-
   nginx:
     image: ${NGINX_IMAGE}
     container_name: observelol-nginx
     restart: unless-stopped
-    depends_on:
-      - dispatcher
     environment:
       INGEST_DOMAIN: "${INGEST_DOMAIN}"
       CONTROL_HOST: "${CONTROL_HOST}"
@@ -43,12 +24,31 @@ services:
       /bin/sh -c "envsubst '$${INGEST_DOMAIN} $${CONTROL_HOST} $${CONTROL_PORT}'
       < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf &&
       exec nginx -g 'daemon off;'"
-    ports:
-      - "443:443"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf.template:ro
-      - ./certs:/etc/letsencrypt/live/${INGEST_DOMAIN}:ro
-      - dispatcher_sock:/var/run/dispatcher
+
+  dispatcher:
+    image: ${DISPATCHER_IMAGE}
+    container_name: observelol-dispatcher
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - nginx
+    ports:
+      - "443:443"
+    environment:
+      REDIS_URL: "unix:///var/run/redis/redis.sock"
+      DISPATCHER_BIND_ADDR: "0.0.0.0:443"
+      TLS_CERT_PATH: "/etc/dispatcher/certs/fullchain.pem"
+      TLS_KEY_PATH: "/etc/dispatcher/certs/privkey.pem"
+      NGINX_UPSTREAM_URL: "http://nginx:80"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://${CONTROL_HOST}:${OTEL_GRPC_PORT}"
+      OTEL_METRIC_EXPORT_INTERVAL: "${OTEL_METRIC_EXPORT_INTERVAL}"
+      REDIS_EVENT_TTL_SEC: "${REDIS_EVENT_TTL_SEC}"
+      GAME_END_GRACE_MS: "${GAME_END_GRACE_MS}"
+    volumes:
+      - redis_sock:/var/run/redis
+      - ./certs:/etc/dispatcher/certs:ro
 
   cadvisor:
     image: ${CADVISOR_IMAGE}
@@ -69,4 +69,3 @@ services:
 
 volumes:
   redis_sock:
-  dispatcher_sock:

@@ -1,41 +1,94 @@
+use std::{fs::File, io::BufReader, sync::Arc};
+
 use axum::Router;
-#[cfg(unix)]
-use tracing::info;
+use hyper_util::{
+    rt::{TokioExecutor, TokioIo},
+    server::conn::auto::Builder as AutoBuilder,
+    service::TowerToHyperService,
+};
+use rustls::ServerConfig;
+use tokio::net::TcpListener;
+use tokio_rustls::TlsAcceptor;
+use tracing::{info, warn};
 
-#[cfg(unix)]
-pub async fn serve_unix_socket(app: Router, socket_path: &str) {
-    use std::os::unix::fs::PermissionsExt;
-    use std::path::Path;
-    use tokio::net::UnixListener;
+pub async fn serve_tls(app: Router, bind_addr: &str, cert_path: &str, key_path: &str) {
+    let tls_acceptor = build_tls_acceptor(cert_path, key_path);
 
-    let path = Path::new(socket_path);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).expect("Failed to create Unix socket parent directory");
+    let listener = TcpListener::bind(bind_addr)
+        .await
+        .expect("Failed to bind TCP listener");
+
+    info!(bind_addr, "Dispatcher listening for HTTPS traffic");
+
+    let shutdown = shutdown_signal();
+    tokio::pin!(shutdown);
+
+    loop {
+        tokio::select! {
+            _ = &mut shutdown => {
+                info!("Shutdown signal received, stopping HTTPS listener");
+                break;
+            }
+            accept_res = listener.accept() => {
+                let (tcp_stream, _) = match accept_res {
+                    Ok(conn) => conn,
+                    Err(err) => {
+                        warn!(error = %err, "Failed to accept TCP connection");
+                        continue;
+                    }
+                };
+
+                let _ = tcp_stream.set_nodelay(true);
+                let tls_acceptor = tls_acceptor.clone();
+                let app = app.clone();
+
+                tokio::spawn(async move {
+                    let tls_stream = match tls_acceptor.accept(tcp_stream).await {
+                        Ok(stream) => stream,
+                        Err(err) => {
+                            warn!(error = %err, "TLS handshake failed");
+                            return;
+                        }
+                    };
+
+                    let io = TokioIo::new(tls_stream);
+                    let service = TowerToHyperService::new(app);
+
+                    if let Err(err) = AutoBuilder::new(TokioExecutor::new())
+                        .serve_connection(io, service)
+                        .await
+                    {
+                        warn!(error = %err, "HTTPS connection terminated with error");
+                    }
+                });
+            }
+        }
     }
-    if path.exists() {
-        std::fs::remove_file(path).expect("Failed to remove stale Unix socket file");
-    }
-
-    let listener = UnixListener::bind(path).expect("Failed to bind Unix Domain Socket");
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o666))
-        .expect("Failed to set 0666 permissions on Unix Domain Socket");
-
-    info!(socket_path, "Dispatcher listening on Unix Domain Socket");
-
-    let res = axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await;
-
-    if path.exists() {
-        let _ = std::fs::remove_file(path);
-    }
-
-    res.expect("Dispatcher server terminated with error");
 }
 
-#[cfg(not(unix))]
-pub async fn serve_unix_socket(_app: Router, _socket_path: &str) {
-    panic!("Dispatcher Unix Domain Socket listener requires a Unix/Linux host container");
+fn build_tls_acceptor(cert_path: &str, key_path: &str) -> TlsAcceptor {
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    let cert_file = File::open(cert_path).expect("Failed to open TLS certificate file");
+    let mut cert_reader = BufReader::new(cert_file);
+    let certs = rustls_pemfile::certs(&mut cert_reader)
+        .collect::<Result<Vec<_>, _>>()
+        .expect("Failed to parse TLS certificate chain");
+
+    let key_file = File::open(key_path).expect("Failed to open TLS private key file");
+    let mut key_reader = BufReader::new(key_file);
+    let key = rustls_pemfile::private_key(&mut key_reader)
+        .expect("Failed to read TLS private key")
+        .expect("No private key found in TLS key file");
+
+    let mut config = ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(certs, key)
+        .expect("Invalid TLS certificate or private key");
+
+    config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+
+    TlsAcceptor::from(Arc::new(config))
 }
 
 #[cfg(unix)]
@@ -48,4 +101,9 @@ async fn shutdown_signal() {
         std::future::pending::<()>().await;
     }
     info!("SIGTERM shutdown signal received");
+}
+
+#[cfg(not(unix))]
+async fn shutdown_signal() {
+    let _ = tokio::signal::ctrl_c().await;
 }

@@ -95,12 +95,12 @@ runs:
         dispatcher_image: ${{ env.TEST_IMAGE }}
         control_host: "127.0.0.1"
 
-    - name: "Smoke test: Verify /health endpoint"
+    - name: "Smoke test: Verify /health endpoint and nginx fallback"
       shell: bash
       env:
         VM_TEST_NAME: "ingest-test-${{ github.run_id }}-${{ github.run_attempt }}"
       run: |
-        gcloud compute ssh "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --tunnel-through-iap --command="curl -k -f -s -i -H 'Host: ${INGEST_DOMAIN}' https://127.0.0.1/health"
+        gcloud compute ssh "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --tunnel-through-iap --command="curl -k -f -s -i -H 'Host: ${INGEST_DOMAIN}' https://127.0.0.1/health && curl -k -f -s -i -H 'Host: ${INGEST_DOMAIN}' https://127.0.0.1/"
 
     - name: "Smoke test: Verify cAdvisor metrics"
       shell: bash
