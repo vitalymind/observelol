@@ -63,7 +63,7 @@ ci_versions:
 container_images:
   redis: "redis:7-alpine"
   nginx: "nginx:1.30-alpine"
-  cadvisor: "gcr.io/cadvisor/cadvisor:v0.49.1"
+  cadvisor: "ghcr.io/google/cadvisor:v0.60.2"
   otel_lgtm: "grafana/otel-lgtm:0.38.1"
   rust_builder: "rust:1.99-slim-bookworm"
   debian_runtime: "debian:bookworm-slim"
