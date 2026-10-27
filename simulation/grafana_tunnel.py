@@ -48,7 +48,7 @@ def main() -> None:
     vm_name = config["infra_definitions"]["control_vm"]["name"]
     zone = f"{region}-{zone_letter}"
 
-    gcloud = shutil.which("gcloud") or "gcloud"
+    gcloud = shutil.which("gcloud.cmd") or shutil.which("gcloud") or "gcloud"
 
     cmd = [
         gcloud,
@@ -58,16 +58,8 @@ def main() -> None:
         f"--project={project_id}",
         f"--zone={zone}",
         "--tunnel-through-iap",
-        "--",
-        "-N",
-        "-L",
-        f"localhost:{LOCAL_PORT}:localhost:{REMOTE_PORT}",
-        "-o",
-        "ServerAliveInterval=15",
-        "-o",
-        "ServerAliveCountMax=3",
-        "-o",
-        "ExitOnForwardFailure=yes",
+        f"--ssh-flag=-L {LOCAL_PORT}:127.0.0.1:{REMOTE_PORT}",
+        "--command=while true; do sleep 30; done",
     ]
 
     print(f"Target SSH IAP tunnel: {vm_name}:{REMOTE_PORT} ({zone})")

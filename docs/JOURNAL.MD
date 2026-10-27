@@ -54,3 +54,11 @@
 - Added bare bone control with otel-lgtm stack
 - Added simulation scripts
 - Added grafana dashboard
+
+# 27.10.2026
+- Adding python load tester app wrapping Locust
+- Figuring out problem with redis automatic default response timeout 500 ms and related csacading blocking failure
+- Moved to medium VM for ingest
+- Improved grafana tunnel, multiplexed connection
+- Switched to cAdvisor from node_exporter to see into SPU use per container
+- 

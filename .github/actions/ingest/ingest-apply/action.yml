@@ -31,7 +31,7 @@ runs:
         mappings: |
           REDIS_IMAGE=.container_images.redis
           NGINX_IMAGE=.container_images.nginx
-          NODE_EXPORTER_IMAGE=.container_images.node_exporter
+          CADVISOR_IMAGE=.container_images.cadvisor
           REDIS_MAXMEMORY=.ingest_config.redis_maxmemory
           INGEST_DOMAIN=.ingest_config.domain
           CONTROL_PORT=.ingest_config.control_port

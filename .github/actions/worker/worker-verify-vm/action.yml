@@ -120,12 +120,12 @@ runs:
         echo "Worker failed to register consumer group in Redis"
         exit 1
 
-    - name: Smoke test Verify node-exporter metrics
+    - name: Smoke test Verify cAdvisor metrics
       shell: bash
       env:
         VM_TEST_NAME: "worker-test-${{ github.run_id }}-${{ github.run_attempt }}"
       run: |
-        gcloud compute ssh "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --tunnel-through-iap --command="curl -f -s http://127.0.0.1:9100/metrics > /dev/null"
+        gcloud compute ssh "${VM_TEST_NAME}" --zone="${REGION}-${ZONE}" --tunnel-through-iap --command="curl -f -s http://127.0.0.1:8080/metrics > /dev/null"
 
     - name: Teardown Test VM and Artifacts (Always Runs)
       if: always()

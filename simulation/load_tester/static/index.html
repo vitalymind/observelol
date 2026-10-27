@@ -1,0 +1,990 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ObserveLoL — Locust Load Simulation Controller</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --panel: #131b2e;
+      --panel-alt: #182238;
+      --border: #263454;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      --mono: "JetBrains Mono", Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* Header Bar */
+    header {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 22px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .state-badge {
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      font-family: var(--mono);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      border: 1px solid transparent;
+    }
+
+    .state-IDLE {
+      background: rgba(148, 163, 184, 0.15);
+      color: #cbd5e1;
+      border-color: rgba(148, 163, 184, 0.3);
+    }
+
+    .state-SPAWNING {
+      background: rgba(245, 158, 11, 0.15);
+      color: #fbbf24;
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+
+    .state-RUNNING {
+      background: rgba(34, 197, 94, 0.18);
+      color: #4ade80;
+      border-color: rgba(34, 197, 94, 0.45);
+    }
+
+    .state-STOPPING {
+      background: rgba(239, 68, 68, 0.18);
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.45);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      cursor: pointer;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 9px 16px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text);
+      background: var(--panel-alt);
+      transition: all 0.15s ease;
+    }
+
+    button:hover:not(:disabled) {
+      border-color: var(--accent);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .btn-start {
+      background: #16a34a;
+      border-color: #22c55e;
+      color: #fff;
+    }
+
+    .btn-start:hover:not(:disabled) {
+      background: #15803d;
+      border-color: #4ade80;
+    }
+
+    .btn-stop {
+      background: #dc2626;
+      border-color: #ef4444;
+      color: #fff;
+    }
+
+    .btn-stop:hover:not(:disabled) {
+      background: #b91c1c;
+      border-color: #f87171;
+    }
+
+    .btn-apply {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #fff;
+    }
+
+    /* Main Grid */
+    .grid-main {
+      display: grid;
+      grid-template-columns: 1fr 1.15fr;
+      gap: 18px;
+    }
+
+    @media (max-width: 1024px) {
+      .grid-main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+
+    .card-header h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+
+    /* Telemetry KPI Cards */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+    }
+
+    .kpi-box {
+      background: var(--panel-alt);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+
+    .kpi-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .kpi-value {
+      font-size: 1.35rem;
+      font-weight: 700;
+      font-family: var(--mono);
+      margin-top: 4px;
+    }
+
+    .kpi-sub {
+      font-size: 0.76rem;
+      color: var(--muted);
+      margin-top: 2px;
+      font-family: var(--mono);
+    }
+
+    /* Estimated Load Banner */
+    .estimates-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      background: rgba(56, 189, 248, 0.07);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+
+    .estimate-item .label {
+      font-size: 0.74rem;
+      color: #7dd3fc;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .estimate-item .val {
+      font-size: 1.25rem;
+      font-weight: 700;
+      font-family: var(--mono);
+      color: #f0f9ff;
+    }
+
+    /* Form Controls */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group label {
+      font-size: 0.84rem;
+      font-weight: 500;
+      color: #cbd5e1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .hint {
+      font-size: 0.76rem;
+      color: var(--muted);
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 11px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      width: 100%;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .step-pill {
+      background: rgba(56, 189, 248, 0.14);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      color: #38bdf8;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+
+    /* Error Injection Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .code-cell {
+      font-family: var(--mono);
+      font-weight: 600;
+      color: #f8fafc;
+    }
+
+    .desc-cell {
+      font-size: 0.76rem;
+      color: var(--muted);
+      display: block;
+    }
+
+    .pct-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+
+    .pct-input {
+      width: 74px !important;
+      text-align: right;
+    }
+
+    /* Chart Canvas */
+    .chart-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      height: 190px;
+      position: relative;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .status-toast {
+      font-size: 0.8rem;
+      font-family: var(--mono);
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Top Header & Swarm Execution Controls -->
+    <header>
+      <div class="brand">
+        <h1>ObserveLoL Load Simulation Controller</h1>
+        <span id="swarmStateBadge" class="state-badge state-IDLE">IDLE</span>
+        <span id="statusToast" class="status-toast"></span>
+      </div>
+      <div class="header-actions">
+        <button id="btnStart" class="btn-start" onclick="startSwarm()">▶ Start Swarm</button>
+        <button id="btnStop" class="btn-stop" onclick="stopSwarm()" disabled>■ Stop Swarm</button>
+        <button id="btnApply" class="btn-apply" onclick="applyConfig()">Apply Config</button>
+        <button id="btnReset" onclick="resetStats()">Reset Telemetry</button>
+      </div>
+    </header>
+
+    <!-- Live Estimated Load Banner -->
+    <div class="estimates-bar">
+      <div class="estimate-item">
+        <div class="label">Estimated RPS</div>
+        <div class="val" id="estRps">0.00</div>
+      </div>
+      <div class="estimate-item">
+        <div class="label">Games Per Minute (GPM)</div>
+        <div class="val" id="estGpm">0.00</div>
+      </div>
+      <div class="estimate-item">
+        <div class="label">Hero Select Window</div>
+        <div class="val" id="estHeroSelect">5s</div>
+      </div>
+      <div class="estimate-item">
+        <div class="label">Avg Requests / Game</div>
+        <div class="val" id="estAvgReqs">111.5</div>
+      </div>
+    </div>
+
+    <div class="grid-main">
+      <!-- Left Column: Swarm & Game Lifecycle Controls + Error Injection Table -->
+      <div style="display: flex; flex-direction: column; gap: 18px;">
+        <div class="card">
+          <div class="card-header">
+            <h2>1. Swarm & Game Lifecycle Parameters</h2>
+            <span class="hint">HTTPS Keep-Alive (FastHttpUser)</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="targetHost">Target Host</label>
+              <input type="text" id="targetHost" value="https://observelol.vbrokh.dev" oninput="recalcEstimates()" />
+            </div>
+            <div class="form-group">
+              <label for="producersCount">
+                <span>Producers Count (Concurrent)</span>
+              </label>
+              <input type="number" id="producersCount" min="1" max="10000" step="1" value="10" oninput="recalcEstimates()" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>
+              <span>Game Duration Range: <strong id="gameDurationVal" style="font-family: var(--mono); color: var(--accent);">45s – 75s</strong> <span class="hint" id="avgDurationHint">(Avg: 60.0s)</span></span>
+              <span id="heroSelectBadge" class="step-pill">Hero Select: 5s</span>
+            </label>
+            <div class="form-row">
+              <div>
+                <div class="slider-wrap">
+                  <span class="hint">Min</span>
+                  <input type="range" id="minGameDuration" min="30" max="600" step="1" value="45" oninput="syncDurationSliders('min')" />
+                  <span class="hint" id="minDurationText" style="font-family: var(--mono); width: 38px; text-align: right;">45s</span>
+                </div>
+              </div>
+              <div>
+                <div class="slider-wrap">
+                  <span class="hint">Max</span>
+                  <input type="range" id="maxGameDuration" min="30" max="600" step="1" value="75" oninput="syncDurationSliders('max')" />
+                  <span class="hint" id="maxDurationText" style="font-family: var(--mono); width: 38px; text-align: right;">75s</span>
+                </div>
+              </div>
+            </div>
+            <span class="hint">Hero Select Steps (by Min Duration): 30–60s → 5s | 61–180s → 10s | 181–360s → 15s | 361–600s → 20s</span>
+          </div>
+
+          <div class="form-group">
+            <label for="initialDelayPct">
+              <span>Initial Producer Delay (One-Time): <strong id="initialDelayVal" style="font-family: var(--mono); color: var(--accent);">0.0s – 45.0s</strong></span>
+              <span class="hint" id="initialDelayPctText" style="font-family: var(--mono);">100% of Min Duration</span>
+            </label>
+            <div class="slider-wrap">
+              <span class="hint">0%</span>
+              <input type="range" id="initialDelayPct" min="0" max="100" step="1" value="100" oninput="recalcEstimates()" />
+              <span class="hint">100%</span>
+            </div>
+            <span class="hint">0% = immediate start (roll 0s) | 100% = random roll up to Min Game Duration before first game</span>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label for="gameEventsTarget">
+                <span>Game Events Target (Max)</span>
+                <span class="hint" id="eventsRangeHint">Runtime: 95–100</span>
+              </label>
+              <input type="number" id="gameEventsTarget" min="0" max="50000" step="1" value="100" oninput="recalcEstimates()" />
+              <span class="hint">Kills, LevelUps & Items (95%–100% rolled per game)</span>
+            </div>
+
+            <div class="form-group">
+              <label>Hero Items Count (0–6 per Slot)</label>
+              <div class="form-row" style="gap: 8px;">
+                <div>
+                  <input type="number" id="minItems" min="0" max="6" step="1" value="0" oninput="recalcEstimates()" title="Min items per hero" />
+                  <span class="hint">Min (0–6)</span>
+                </div>
+                <div>
+                  <input type="number" id="maxItems" min="0" max="6" step="1" value="6" oninput="recalcEstimates()" title="Max items per hero" />
+                  <span class="hint">Max (0–6)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error Injection Table -->
+        <div class="card">
+          <div class="card-header">
+            <h2>2. Error Injection Probabilities (Independent per Game)</h2>
+            <button onclick="zeroAllErrors()" style="padding: 4px 10px; font-size: 0.76rem;">Zero All (0%)</button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Error Code & Rule</th>
+                <th style="text-align: right;">Injected</th>
+                <th style="text-align: right;">Occurrence %</th>
+              </tr>
+            </thead>
+            <tbody id="errorTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Right Column: Real-Time Telemetry & Process Monitor -->
+      <div style="display: flex; flex-direction: column; gap: 18px;">
+        <div class="card">
+          <div class="card-header">
+            <h2>3. Real-Time Telemetry & Process Monitor</h2>
+            <span class="hint" id="sseStatus">SSE Connected</span>
+          </div>
+
+          <div class="kpi-grid">
+            <div class="kpi-box">
+              <div class="kpi-label">Live Aggregate RPS</div>
+              <div class="kpi-value" id="telRps" style="color: var(--accent);">0.00</div>
+              <div class="kpi-sub">Fail/s: <span id="telFailRps">0.00</span></div>
+            </div>
+
+            <div class="kpi-box">
+              <div class="kpi-label">Failure Rate</div>
+              <div class="kpi-value" id="telFailRate">0.00%</div>
+              <div class="kpi-sub">Failed: <span id="telFailed">0</span></div>
+            </div>
+
+            <div class="kpi-box">
+              <div class="kpi-label">Total Requests</div>
+              <div class="kpi-value" id="telTotalReqs">0</div>
+              <div class="kpi-sub">OK: <span id="telSuccessReqs" style="color: var(--success);">0</span></div>
+            </div>
+
+            <div class="kpi-box">
+              <div class="kpi-label">Active Producers</div>
+              <div class="kpi-value" id="telProducers">0</div>
+              <div class="kpi-sub">Active Games: <span id="telActiveGames">0</span></div>
+            </div>
+
+            <div class="kpi-box">
+              <div class="kpi-label">Games Completed</div>
+              <div class="kpi-value" id="telGamesCompleted">0</div>
+              <div class="kpi-sub">With Errors: <span id="telGamesFaulty">0</span></div>
+            </div>
+
+            <div class="kpi-box">
+              <div class="kpi-label">Process Resources</div>
+              <div class="kpi-value" id="telCpu">0.0%</div>
+              <div class="kpi-sub">RAM: <span id="telMem">0.0</span> MB</div>
+            </div>
+          </div>
+
+          <!-- Live RPS & Failures Chart -->
+          <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+              <span class="hint">Live Throughput History (Last 60s)</span>
+              <span class="hint">
+                <span style="color: #38bdf8;">■ RPS</span> &nbsp;
+                <span style="color: #ef4444;">■ Failures/s</span>
+              </span>
+            </div>
+            <div class="chart-box">
+              <canvas id="rpsChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Endpoint Breakdown Table -->
+          <div>
+            <h3 style="font-size: 0.88rem; color: var(--muted); margin-bottom: 8px;">Endpoint Breakdown</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Endpoint</th>
+                  <th style="text-align: right;">Requests</th>
+                  <th style="text-align: right;">Failures</th>
+                  <th style="text-align: right;">Avg (ms)</th>
+                  <th style="text-align: right;">p95 (ms)</th>
+                  <th style="text-align: right;">RPS</th>
+                </tr>
+              </thead>
+              <tbody id="endpointTableBody">
+                <tr>
+                  <td colspan="6" style="text-align: center; color: var(--muted);">No traffic recorded yet</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const ERROR_DEFINITIONS = [
+      { code: "INDEX_GAP", desc: "Intentionally skip an event index in timeline" },
+      { code: "MISSING_ROUND_START", desc: "Drop RoundStart event (re-indexed contiguously)" },
+      { code: "MISSING_GAME_STARTED", desc: "Drop initial GameStarted event at index 0" },
+      { code: "DUPLICATE_HERO_SLOT", desc: "Select the same hero slot multiple times" },
+      { code: "MISSING_HERO_SLOTS", desc: "Skip a hero slot assignment before RoundStart" },
+      { code: "HERO_AFTER_ROUND_START", desc: "Send extra HeroSelected event after RoundStart" },
+      { code: "UNORDERED_TIMESTAMP", desc: "Send non-monotonic out-of-order timestamp_ms" },
+      { code: "INVALID_SLOT", desc: "Send slot out of bounds (slot >= 10)" }
+    ];
+
+    const historyRps = [];
+    const historyFailRps = [];
+    const MAX_HISTORY = 60;
+
+    function buildErrorTable() {
+      const tbody = document.getElementById("errorTableBody");
+      tbody.innerHTML = "";
+      for (const item of ERROR_DEFINITIONS) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>
+            <span class="code-cell">${item.code}</span>
+            <span class="desc-cell">${item.desc}</span>
+          </td>
+          <td style="text-align: right; font-family: var(--mono); color: var(--muted);" id="inj_${item.code}">0</td>
+          <td>
+            <div class="pct-input-wrap">
+              <input
+                type="number"
+                class="pct-input"
+                id="err_${item.code}"
+                min="0"
+                max="100"
+                step="1"
+                value="0"
+                onchange="clampErrorInput(this)"
+              />
+              <span class="hint">%</span>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    function clampErrorInput(el) {
+      let val = Math.round(Number(el.value) || 0);
+      val = Math.max(0, Math.min(100, val));
+      el.value = val;
+    }
+
+    function zeroAllErrors() {
+      for (const item of ERROR_DEFINITIONS) {
+        const el = document.getElementById(`err_${item.code}`);
+        if (el) el.value = 0;
+      }
+    }
+
+    function getHeroSelectStep(durationSec) {
+      if (durationSec <= 60) return 5;
+      if (durationSec <= 180) return 10;
+      if (durationSec <= 360) return 15;
+      return 20;
+    }
+
+    function syncDurationSliders(changed) {
+      const minEl = document.getElementById("minGameDuration");
+      const maxEl = document.getElementById("maxGameDuration");
+      let minVal = Number(minEl.value) || 30;
+      let maxVal = Number(maxEl.value) || 60;
+
+      if (changed === "min" && minVal > maxVal) {
+        maxEl.value = minVal;
+      } else if (changed === "max" && maxVal < minVal) {
+        minEl.value = maxVal;
+      }
+      recalcEstimates();
+    }
+
+    function recalcEstimates() {
+      const producers = Math.max(1, Number(document.getElementById("producersCount").value) || 1);
+      const minDurationSec = Math.max(30, Math.min(600, Number(document.getElementById("minGameDuration").value) || 45));
+      const maxDurationSec = Math.max(minDurationSec, Math.min(600, Number(document.getElementById("maxGameDuration").value) || 75));
+      const initialDelayPct = Math.max(0, Math.min(100, Math.round(Number(document.getElementById("initialDelayPct").value) || 0)));
+      const maxInitialDelaySec = minDurationSec * (initialDelayPct / 100.0);
+      const avgDurationSec = (minDurationSec + maxDurationSec) / 2.0;
+      const eventsTarget = Math.max(0, Number(document.getElementById("gameEventsTarget").value) || 0);
+
+      document.getElementById("minDurationText").textContent = `${minDurationSec}s`;
+      document.getElementById("maxDurationText").textContent = `${maxDurationSec}s`;
+      document.getElementById("gameDurationVal").textContent = `${minDurationSec}s – ${maxDurationSec}s`;
+      document.getElementById("avgDurationHint").textContent = `(Avg: ${avgDurationSec.toFixed(1)}s)`;
+
+      document.getElementById("initialDelayVal").textContent =
+        initialDelayPct === 0 ? "0.0s (Immediate)" : `0.0s – ${maxInitialDelaySec.toFixed(1)}s`;
+      document.getElementById("initialDelayPctText").textContent = `${initialDelayPct}% of Min Duration`;
+
+      const heroSelectSec = getHeroSelectStep(minDurationSec);
+      document.getElementById("heroSelectBadge").textContent = `Hero Select: ${heroSelectSec}s`;
+      document.getElementById("estHeroSelect").textContent = `${heroSelectSec}s`;
+
+      const minEvents = Math.floor(eventsTarget * 0.95);
+      document.getElementById("eventsRangeHint").textContent = `Runtime: ${minEvents}–${eventsTarget}`;
+
+      const avgActionEvents = eventsTarget * 0.975;
+      const avgTotalRequests = 14 + avgActionEvents; // 1 GET + 13 lifecycle POST + action events
+      const estRps = (producers * avgTotalRequests) / avgDurationSec;
+      const estGpm = (producers * 60) / avgDurationSec;
+
+      document.getElementById("estRps").textContent = estRps.toFixed(2);
+      document.getElementById("estGpm").textContent = estGpm.toFixed(2);
+      document.getElementById("estAvgReqs").textContent = avgTotalRequests.toFixed(1);
+    }
+
+    function collectConfigPayload() {
+      const errorRates = {};
+      for (const item of ERROR_DEFINITIONS) {
+        const el = document.getElementById(`err_${item.code}`);
+        errorRates[item.code] = Math.max(0, Math.min(100, Math.round(Number(el.value) || 0)));
+      }
+
+      return {
+        target_host: document.getElementById("targetHost").value.trim(),
+        producers: Number(document.getElementById("producersCount").value) || 1,
+        min_game_duration_sec: Number(document.getElementById("minGameDuration").value) || 45,
+        max_game_duration_sec: Number(document.getElementById("maxGameDuration").value) || 75,
+        initial_delay_pct: Math.max(0, Math.min(100, Math.round(Number(document.getElementById("initialDelayPct").value) || 0))),
+        game_events_target: Number(document.getElementById("gameEventsTarget").value) || 0,
+        min_items_per_hero: Number(document.getElementById("minItems").value) || 0,
+        max_items_per_hero: Number(document.getElementById("maxItems").value) || 0,
+        error_rates: errorRates
+      };
+    }
+
+    function populateConfigForm(cfg) {
+      if (!cfg) return;
+      document.getElementById("targetHost").value = cfg.target_host || "https://observelol.vbrokh.dev";
+      document.getElementById("producersCount").value = cfg.producers ?? 10;
+      document.getElementById("minGameDuration").value = cfg.min_game_duration_sec ?? 45;
+      document.getElementById("maxGameDuration").value = cfg.max_game_duration_sec ?? 75;
+      document.getElementById("initialDelayPct").value = cfg.initial_delay_pct ?? 100;
+      document.getElementById("gameEventsTarget").value = cfg.game_events_target ?? 100;
+      document.getElementById("minItems").value = cfg.min_items_per_hero ?? 0;
+      document.getElementById("maxItems").value = cfg.max_items_per_hero ?? 6;
+
+      if (cfg.error_rates) {
+        for (const item of ERROR_DEFINITIONS) {
+          const el = document.getElementById(`err_${item.code}`);
+          if (el && cfg.error_rates[item.code] !== undefined) {
+            el.value = cfg.error_rates[item.code];
+          }
+        }
+      }
+      recalcEstimates();
+    }
+
+    function flashStatus(msg) {
+      const el = document.getElementById("statusToast");
+      el.textContent = msg;
+      setTimeout(() => {
+        if (el.textContent === msg) el.textContent = "";
+      }, 2500);
+    }
+
+    async function applyConfig() {
+      const payload = collectConfigPayload();
+      const res = await fetch("/api/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const updated = await res.json();
+      populateConfigForm(updated);
+      flashStatus("Configuration applied");
+    }
+
+    async function startSwarm() {
+      const payload = collectConfigPayload();
+      const res = await fetch("/api/swarm/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (data.config) populateConfigForm(data.config);
+      if (data.telemetry) renderTelemetry(data.telemetry);
+      flashStatus("Swarm started");
+    }
+
+    async function stopSwarm() {
+      const res = await fetch("/api/swarm/stop", { method: "POST" });
+      const data = await res.json();
+      if (data.telemetry) renderTelemetry(data.telemetry);
+      flashStatus("Stopping swarm...");
+    }
+
+    async function resetStats() {
+      const res = await fetch("/api/swarm/reset", { method: "POST" });
+      const data = await res.json();
+      historyRps.length = 0;
+      historyFailRps.length = 0;
+      if (data.telemetry) renderTelemetry(data.telemetry);
+      flashStatus("Telemetry reset");
+    }
+
+    function renderTelemetry(t) {
+      const state = t.state || "IDLE";
+      const badge = document.getElementById("swarmStateBadge");
+      badge.textContent = state;
+      badge.className = `state-badge state-${state}`;
+
+      const isIdle = state === "IDLE";
+      document.getElementById("btnStart").disabled = !isIdle && state !== "STOPPING";
+      document.getElementById("btnStop").disabled = isIdle;
+
+      document.getElementById("telRps").textContent = (t.current_rps ?? 0).toFixed(2);
+      document.getElementById("telFailRps").textContent = (t.current_fail_per_sec ?? 0).toFixed(2);
+
+      const failRate = t.failure_rate_pct ?? 0;
+      const failRateEl = document.getElementById("telFailRate");
+      failRateEl.textContent = `${failRate.toFixed(2)}%`;
+      failRateEl.style.color = failRate > 0 ? "var(--danger)" : "var(--text)";
+
+      document.getElementById("telFailed").textContent = t.failed_requests ?? 0;
+      document.getElementById("telTotalReqs").textContent = t.total_requests ?? 0;
+      document.getElementById("telSuccessReqs").textContent = t.successful_requests ?? 0;
+      document.getElementById("telProducers").textContent = `${t.active_producers ?? 0} / ${t.target_producers ?? 0}`;
+
+      if (t.games) {
+        document.getElementById("telActiveGames").textContent = t.games.active ?? 0;
+        document.getElementById("telGamesCompleted").textContent = t.games.completed ?? 0;
+        document.getElementById("telGamesFaulty").textContent = t.games.with_injected_errors ?? 0;
+
+        if (t.games.injected_by_code) {
+          for (const item of ERROR_DEFINITIONS) {
+            const cell = document.getElementById(`inj_${item.code}`);
+            if (cell) {
+              cell.textContent = t.games.injected_by_code[item.code] ?? 0;
+            }
+          }
+        }
+      }
+
+      if (t.process) {
+        document.getElementById("telCpu").textContent = `${(t.process.cpu_percent ?? 0).toFixed(1)}%`;
+        document.getElementById("telMem").textContent = (t.process.memory_mb ?? 0).toFixed(1);
+      }
+
+      // Endpoint table
+      const epBody = document.getElementById("endpointTableBody");
+      if (t.endpoints && t.endpoints.length > 0) {
+        epBody.innerHTML = t.endpoints.map(ep => `
+          <tr>
+            <td class="code-cell">${ep.name}</td>
+            <td style="text-align: right; font-family: var(--mono);">${ep.num_requests}</td>
+            <td style="text-align: right; font-family: var(--mono); color: ${ep.num_failures > 0 ? 'var(--danger)' : 'var(--muted)'};">${ep.num_failures}</td>
+            <td style="text-align: right; font-family: var(--mono);">${ep.avg_response_time_ms.toFixed(1)}</td>
+            <td style="text-align: right; font-family: var(--mono);">${ep.p95_response_time_ms.toFixed(1)}</td>
+            <td style="text-align: right; font-family: var(--mono); color: var(--accent);">${ep.current_rps.toFixed(2)}</td>
+          </tr>
+        `).join("");
+      } else {
+        epBody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--muted);">No traffic recorded yet</td></tr>`;
+      }
+
+      // Push chart history
+      historyRps.push(t.current_rps ?? 0);
+      historyFailRps.push(t.current_fail_per_sec ?? 0);
+      if (historyRps.length > MAX_HISTORY) historyRps.shift();
+      if (historyFailRps.length > MAX_HISTORY) historyFailRps.shift();
+      drawChart();
+    }
+
+    function drawChart() {
+      const canvas = document.getElementById("rpsChart");
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = rect.width * window.devicePixelRatio;
+      canvas.height = rect.height * window.devicePixelRatio;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+      const w = rect.width;
+      const h = rect.height;
+      ctx.clearRect(0, 0, w, h);
+
+      const maxVal = Math.max(10, ...historyRps, ...historyFailRps) * 1.15;
+
+      // Grid lines
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.12)";
+      ctx.lineWidth = 1;
+      for (let i = 1; i <= 3; i++) {
+        const y = (h / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      function plotSeries(series, color, fillAlpha) {
+        if (series.length < 2) return;
+        ctx.beginPath();
+        series.forEach((val, idx) => {
+          const x = (idx / (MAX_HISTORY - 1)) * w;
+          const y = h - (val / maxVal) * (h - 14) - 4;
+          if (idx === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        const lastX = ((series.length - 1) / (MAX_HISTORY - 1)) * w;
+        ctx.lineTo(lastX, h);
+        ctx.lineTo(0, h);
+        ctx.closePath();
+        ctx.fillStyle = fillAlpha;
+        ctx.fill();
+      }
+
+      plotSeries(historyRps, "#38bdf8", "rgba(56, 189, 248, 0.12)");
+      plotSeries(historyFailRps, "#ef4444", "rgba(239, 68, 68, 0.18)");
+    }
+
+    function connectTelemetryStream() {
+      const statusEl = document.getElementById("sseStatus");
+      const es = new EventSource("/api/telemetry/stream");
+
+      es.onopen = () => {
+        statusEl.textContent = "SSE Live (1s)";
+        statusEl.style.color = "var(--success)";
+      };
+
+      es.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data);
+          renderTelemetry(data);
+        } catch (err) {
+          console.error("Failed to parse telemetry SSE:", err);
+        }
+      };
+
+      es.onerror = () => {
+        statusEl.textContent = "SSE Reconnecting...";
+        statusEl.style.color = "var(--warning)";
+      };
+    }
+
+    async function init() {
+      buildErrorTable();
+      recalcEstimates();
+      try {
+        const res = await fetch("/api/config");
+        const cfg = await res.json();
+        populateConfigForm(cfg);
+      } catch (e) {
+        console.error("Initial config fetch failed:", e);
+      }
+      connectTelemetryStream();
+    }
+
+    window.addEventListener("DOMContentLoaded", init);
+    window.addEventListener("resize", drawChart);
+  </script>
+</body>
+</html>
