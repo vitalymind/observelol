@@ -9,15 +9,6 @@ pub const WORKERS_CONSUMER_GROUP: &str = "workers";
 /// Redis key storing the currently active Heroes & Items snapshot JSON.
 pub const ACTIVE_SNAPSHOT_KEY: &str = "snapshot:active";
 
-/// Redis keyspace notification channel emitted when `snapshot:active` is modified (`SET`, `DEL`, `UNLINK`).
-pub const SNAPSHOT_KEYSPACE_CHANNEL: &str = "__keyspace@0__:snapshot:active";
-
-/// Explicit Redis Pub/Sub channel that writers (`control`) may optionally publish to on snapshot updates.
-pub const SNAPSHOT_UPDATES_CHANNEL: &str = "snapshot:updates";
-
-/// Default JSON snapshot used when `snapshot:active` is not yet populated in Redis.
-pub const DEFAULT_EMPTY_SNAPSHOT_JSON: &str = r#"{"heroes":[],"items":[]}"#;
-
 /// Stack-allocated Redis list key (`game:{game_id}:events`, 48 bytes) to avoid heap allocations on the hot path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GameEventsKey([u8; 48]);

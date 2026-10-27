@@ -249,12 +249,10 @@ impl StoredEvent {
 }
 
 /// Response returned by `GET /api/new-game/`.
-/// Borrows a pre-validated `RawValue` so snapshot JSON is written verbatim
-/// without DOM tree allocation or re-serialization.
-#[derive(Debug, Clone, Serialize)]
-pub struct NewGameResponse<'a> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NewGameResponse {
     pub game_id: Uuid,
-    pub snapshot: &'a RawValue,
+    pub snapshot: serde_json::Value,
 }
 
 #[cfg(test)]
@@ -283,9 +281,8 @@ mod tests {
         assert_eq!(incoming.stored.event_index(), 2);
         assert_eq!(incoming.stored.timestamp_ms(), 1500);
 
-        let mut buf = [0u8; 32];
-        let binary = postcard::to_slice(&incoming.stored, &mut buf).unwrap();
-        let decoded: StoredEvent = postcard::from_bytes(binary).unwrap();
+        let binary = postcard::to_allocvec(&incoming.stored).unwrap();
+        let decoded: StoredEvent = postcard::from_bytes(&binary).unwrap();
         assert_eq!(incoming.stored, decoded);
     }
 
