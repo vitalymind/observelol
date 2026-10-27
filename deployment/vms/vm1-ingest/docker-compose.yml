@@ -22,6 +22,7 @@ services:
       REDIS_URL: "unix:///var/run/redis/redis.sock"
       DISPATCHER_SOCKET_PATH: "/var/run/dispatcher/dispatcher.sock"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://${CONTROL_HOST}:${OTEL_GRPC_PORT}"
+      OTEL_METRIC_EXPORT_INTERVAL: "${OTEL_METRIC_EXPORT_INTERVAL}"
       REDIS_EVENT_TTL_SEC: "${REDIS_EVENT_TTL_SEC}"
       GAME_END_GRACE_MS: "${GAME_END_GRACE_MS}"
     volumes:

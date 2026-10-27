@@ -36,6 +36,7 @@ runs:
           INGEST_DOMAIN=.ingest_config.domain
           CONTROL_PORT=.ingest_config.control_port
           OTEL_GRPC_PORT=.ingest_config.otel_grpc_port
+          OTEL_METRIC_EXPORT_INTERVAL=.ingest_config.otel_export_interval_ms
           REDIS_EVENT_TTL_SEC=.ingest_config.redis_event_ttl_sec
           GAME_END_GRACE_MS=.ingest_config.game_end_grace_ms
         vars: |
