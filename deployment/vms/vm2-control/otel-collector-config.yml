@@ -15,7 +15,7 @@ receivers:
             - targets: ["${env:INGEST_HOST}:8080"]
               labels:
                 vm: "ingest"
-            - targets: ["${env:CONTROL_HOST}:8080"]
+            - targets: ["cadvisor:8080"]
               labels:
                 vm: "control"
             - targets: ["${env:WORKER_HOST}:8080"]

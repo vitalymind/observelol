@@ -37,7 +37,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(ingest_events_total[1m])) or vector(0)",
+          "expr": "sum(rate(ingest_events_total[15s])) or vector(0)",
           "refId": "A",
           "interval": "5s"
         }
@@ -133,7 +133,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(ingest_new_games_total[1m])) or vector(0)",
+          "expr": "sum(rate(ingest_new_games_total[15s])) or vector(0)",
           "refId": "A",
           "interval": "5s"
         }
@@ -173,7 +173,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(rate(worker_games_processed_total[1m])) or vector(0)",
+          "expr": "sum(rate(worker_games_processed_total[15s])) or vector(0)",
           "refId": "A",
           "interval": "5s"
         }
@@ -261,7 +261,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(histogram_quantile(0.95, sum by (le) (rate(worker_processing_latency_ms_bucket[1m]))) >= 0) or vector(0)",
+          "expr": "(histogram_quantile(0.95, sum by (le) (rate(worker_processing_latency_ms_bucket[15s]))) >= 0) or vector(0)",
           "refId": "A",
           "interval": "5s"
         }
@@ -326,7 +326,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "clamp_max(sum by (vm) (rate(container_cpu_usage_seconds_total{id=\"/\"}[1m])) / sum by (vm) (machine_cpu_cores), 1)",
+          "expr": "clamp_max(sum by (vm) (rate(container_cpu_usage_seconds_total{id=\"/\"}[15s])) / sum by (vm) (machine_cpu_cores), 1)",
           "legendFormat": "{{vm}}",
           "refId": "A",
           "interval": "5s"
@@ -410,7 +410,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "clamp_max(sum by (name) (rate(container_cpu_usage_seconds_total{vm=\"ingest\", name!=\"\"}[1m])) / scalar(sum(machine_cpu_cores{vm=\"ingest\"})), 1)",
+          "expr": "clamp_max(sum by (name) (rate(container_cpu_usage_seconds_total{vm=\"ingest\", name!=\"\"}[15s])) / scalar(sum(machine_cpu_cores{vm=\"ingest\"})), 1)",
           "legendFormat": "{{name}}",
           "refId": "A",
           "interval": "5s"
@@ -724,7 +724,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (instance) (rate(worker_games_processed_total[1m]))",
+          "expr": "sum by (instance) (rate(worker_games_processed_total[15s]))",
           "legendFormat": "Worker {{instance}}",
           "refId": "A",
           "interval": "5s"
@@ -778,7 +778,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(histogram_quantile(0.95, sum by (le) (rate(ingest_redis_latency_ms_bucket[1m]))) >= 0) or vector(0)",
+          "expr": "(histogram_quantile(0.95, sum by (le) (rate(ingest_redis_latency_ms_bucket[15s]))) >= 0) or vector(0)",
           "legendFormat": "Dispatcher Redis Write (RPUSH)",
           "refId": "A",
           "interval": "5s"
@@ -788,7 +788,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(histogram_quantile(0.95, sum by (le) (rate(worker_redis_latency_ms_bucket{op!=\"xreadgroup\"}[1m]))) >= 0) or vector(0)",
+          "expr": "(histogram_quantile(0.95, sum by (le) (rate(worker_redis_latency_ms_bucket{op!=\"xreadgroup\"}[15s]))) >= 0) or vector(0)",
           "legendFormat": "Worker Redis Read/Ack",
           "refId": "B",
           "interval": "5s"
@@ -798,7 +798,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(histogram_quantile(0.95, sum by (le) (rate(worker_db_latency_ms_bucket[1m]))) >= 0) or vector(0)",
+          "expr": "(histogram_quantile(0.95, sum by (le) (rate(worker_db_latency_ms_bucket[15s]))) >= 0) or vector(0)",
           "legendFormat": "Worker DB Write",
           "refId": "C",
           "interval": "5s"
@@ -906,7 +906,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (stage) (rate(ingest_errors_total[1m])) or vector(0)",
+          "expr": "sum by (stage) (rate(ingest_errors_total[15s])) or vector(0)",
           "legendFormat": "Ingest Error ({{stage}})",
           "refId": "A",
           "interval": "5s"
@@ -916,7 +916,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (stage) (rate(worker_errors_total[1m])) or vector(0)",
+          "expr": "sum by (stage) (rate(worker_errors_total[15s])) or vector(0)",
           "legendFormat": "Worker Error ({{stage}})",
           "refId": "B",
           "interval": "5s"
@@ -926,7 +926,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum by (reason) (rate(worker_dropped_games_total[1m])) or vector(0)",
+          "expr": "sum by (reason) (rate(worker_dropped_games_total[15s])) or vector(0)",
           "legendFormat": "Dropped Games ({{reason}})",
           "refId": "C",
           "interval": "5s"
