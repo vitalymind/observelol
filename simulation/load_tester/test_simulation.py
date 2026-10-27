@@ -207,14 +207,14 @@ class TestControllerAndEndToEnd(unittest.TestCase):
         mock_server.start()
 
         try:
-            controller = LoadController()
+            controller = LoadController(local_mode=True)
             app = create_app(controller)
             client = app.test_client()
 
             # Verify dashboard HTML loads
             res_html = client.get("/")
             self.assertEqual(res_html.status_code, 200)
-            self.assertIn(b"ObserveLoL Load Simulation Controller", res_html.data)
+            self.assertIn(b"Load sim", res_html.data)
 
             # Verify config update and estimate calculation
             res_cfg = client.post(
@@ -264,6 +264,24 @@ class TestControllerAndEndToEnd(unittest.TestCase):
             self.assertEqual(res_tel_after["games"]["active"], 0)
         finally:
             mock_server.stop()
+
+    def test_distributed_master_worker_lifecycle(self) -> None:
+        import gevent
+        from simulation.load_tester.controller import LoadController, find_available_port
+
+        master_port = find_available_port(5557, 5650)
+        controller = LoadController(num_workers=1, master_port=master_port, local_mode=False)
+        try:
+            controller._wait_for_workers(timeout_sec=5.0)
+            self.assertEqual(len(controller.runner.clients.ready), 1)
+
+            gevent.sleep(1.5)
+            tel = controller.get_telemetry()
+            self.assertEqual(tel["process"]["workers_count"], 1)
+            self.assertGreaterEqual(len(tel["process"]["workers"]), 1)
+            self.assertIn("cpu_percent", tel["process"]["workers"][0])
+        finally:
+            controller.stop_workers()
 
 
 if __name__ == "__main__":

@@ -3,10 +3,12 @@ from gevent import monkey
 monkey.patch_all()
 
 import argparse
+import atexit
 import json
 import os
 import random
 import socket
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -31,7 +33,7 @@ from locust.runners import (
 )
 from locust.stats import stats_history
 
-from simulation.load_tester.config import SimulationConfig
+from simulation.load_tester.config import ERROR_CODES, SimulationConfig
 from simulation.load_tester.producer import GameProducerUser, RUNTIME
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -49,19 +51,110 @@ def map_runner_state(raw_state: str | None) -> str:
     return str(raw_state).upper()
 
 
+def find_available_port(start: int = 8100, end: int = 8999) -> int:
+    candidates = list(range(start, end + 1))
+    random.shuffle(candidates)
+    for port in candidates:
+        if port == 3000:
+            continue
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                sock.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    raise RuntimeError(f"No free port found in range {start}-{end}")
+
+
 class LoadController:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        num_workers: int = 4,
+        master_port: int = 0,
+        local_mode: bool = False,
+    ) -> None:
+        self.is_distributed = not local_mode
         self.env = Environment(
             user_classes=[GameProducerUser],
             host=RUNTIME.config.target_host,
         )
-        self.runner = self.env.create_local_runner()
+
+        if not self.is_distributed:
+            self.num_workers = 0
+            self.master_port = 0
+            self.runner = self.env.create_local_runner()
+            self.worker_telemetry = {}
+            self.worker_processes = []
+        else:
+            self.num_workers = max(1, num_workers)
+            self.master_port = (
+                master_port if master_port > 0 else find_available_port(5557, 5650)
+            )
+            self.runner = self.env.create_master_runner(
+                master_bind_host="127.0.0.1",
+                master_bind_port=self.master_port,
+            )
+            self.worker_telemetry: Dict[str, Dict[str, Any]] = {}
+            self._register_master_messages()
+            self.worker_processes: list[subprocess.Popen] = []
+            self._start_workers()
+            atexit.register(self.stop_workers)
+
         self.stats_greenlet = gevent.spawn(stats_history, self.runner)
         self.process = psutil.Process(os.getpid())
-        # Prime psutil CPU measurement
-        self.process.cpu_percent(interval=None)
+        self.process.cpu_percent(interval=None)  # Prime psutil CPU measurement
         self._last_cpu_time = time.monotonic()
         self._cached_cpu_percent = 0.0
+
+    def _register_master_messages(self) -> None:
+        def on_worker_telemetry(environment, msg, **kwargs):
+            if msg.node_id and msg.data:
+                self.worker_telemetry[msg.node_id] = {
+                    "data": msg.data,
+                    "timestamp": time.monotonic(),
+                    "worker_index": self.runner.get_worker_index(msg.node_id),
+                }
+
+        self.runner.register_message("worker_telemetry", on_worker_telemetry)
+
+    def _start_workers(self) -> None:
+        worker_script = Path(__file__).resolve().parent / "worker.py"
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        for _ in range(self.num_workers):
+            proc = subprocess.Popen(
+                [
+                    sys.executable,
+                    str(worker_script),
+                    "--master-host",
+                    "127.0.0.1",
+                    "--master-port",
+                    str(self.master_port),
+                ],
+                creationflags=creationflags,
+            )
+            self.worker_processes.append(proc)
+
+    def stop_workers(self) -> None:
+        for p in self.worker_processes:
+            try:
+                if p.poll() is None:
+                    p.terminate()
+            except Exception:
+                pass
+        self.worker_processes.clear()
+
+    def _wait_for_workers(self, timeout_sec: float = 3.0) -> None:
+        if not self.is_distributed:
+            return
+        end_time = time.monotonic() + timeout_sec
+        while time.monotonic() < end_time:
+            active = getattr(self.runner.clients, "ready", []) + getattr(
+                self.runner.clients, "running", []
+            )
+            if active:
+                return
+            gevent.sleep(0.05)
 
     def apply_config(self, payload: Dict[str, Any]) -> SimulationConfig:
         prev_producers = RUNTIME.config.producers
@@ -69,6 +162,9 @@ class LoadController:
         RUNTIME.config = new_cfg
         self.env.host = new_cfg.target_host
         GameProducerUser.host = new_cfg.target_host
+
+        if self.is_distributed:
+            self.runner.send_message("sync_config", new_cfg.to_dict())
 
         # If swarm is active and producer count changed, dynamically scale runner
         state = map_runner_state(self.runner.state)
@@ -81,10 +177,15 @@ class LoadController:
     def start_swarm(self, payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
         if payload:
             self.apply_config(payload)
+        elif self.is_distributed:
+            self.runner.send_message("sync_config", RUNTIME.config.to_dict())
 
         cfg = RUNTIME.config
         self.env.host = cfg.target_host
         GameProducerUser.host = cfg.target_host
+
+        if self.is_distributed:
+            self._wait_for_workers(timeout_sec=3.0)
 
         spawn_rate = max(1.0, float(cfg.producers))
         self.runner.start(user_count=cfg.producers, spawn_rate=spawn_rate)
@@ -93,12 +194,17 @@ class LoadController:
     def stop_swarm(self) -> Dict[str, Any]:
         if map_runner_state(self.runner.state) != "IDLE":
             self.runner.stop()
+        if self.is_distributed:
+            self.runner.send_message("stop_swarm", {})
         RUNTIME.reset_producers()
         return self.get_telemetry()
 
     def reset_stats(self) -> Dict[str, Any]:
         self.env.stats.reset_all()
         RUNTIME.counters.reset()
+        if self.is_distributed:
+            self.runner.send_message("reset_counters", {})
+            self.worker_telemetry.clear()
         if map_runner_state(self.runner.state) == "IDLE":
             RUNTIME.reset_producers()
         return self.get_telemetry()
@@ -140,6 +246,111 @@ class LoadController:
                 }
             )
 
+        if not self.is_distributed:
+            games_telemetry = {
+                "active": RUNTIME.counters.active_games,
+                "started": RUNTIME.counters.games_started,
+                "completed": RUNTIME.counters.games_completed,
+                "aborted": RUNTIME.counters.games_aborted,
+                "with_injected_errors": RUNTIME.counters.games_with_injected_errors,
+                "injected_by_code": dict(RUNTIME.counters.injected_by_code),
+            }
+            producer_states = RUNTIME.get_producer_states()
+            proc_stats = self._get_process_resources()
+            process_telemetry = {
+                "cpu_percent": proc_stats["cpu_percent"],
+                "memory_mb": proc_stats["memory_mb"],
+                "master": proc_stats,
+                "workers_count": 0,
+                "workers": [],
+            }
+        else:
+            # Filter active workers (heartbeat within 5.0 seconds)
+            now = time.monotonic()
+            active_workers = {
+                node_id: w
+                for node_id, w in self.worker_telemetry.items()
+                if now - w["timestamp"] <= 5.0
+            }
+
+            active_games = sum(
+                w["data"].get("counters", {}).get("active_games", 0)
+                for w in active_workers.values()
+            )
+            games_started = sum(
+                w["data"].get("counters", {}).get("games_started", 0)
+                for w in active_workers.values()
+            )
+            games_completed = sum(
+                w["data"].get("counters", {}).get("games_completed", 0)
+                for w in active_workers.values()
+            )
+            games_aborted = sum(
+                w["data"].get("counters", {}).get("games_aborted", 0)
+                for w in active_workers.values()
+            )
+            games_with_injected_errors = sum(
+                w["data"].get("counters", {}).get("games_with_injected_errors", 0)
+                for w in active_workers.values()
+            )
+
+            injected_by_code: Dict[str, int] = {code: 0 for code in ERROR_CODES}
+            for w in active_workers.values():
+                for code, count in (
+                    w["data"].get("counters", {}).get("injected_by_code", {}).items()
+                ):
+                    injected_by_code[code] = injected_by_code.get(code, 0) + count
+
+            games_telemetry = {
+                "active": active_games,
+                "started": games_started,
+                "completed": games_completed,
+                "aborted": games_aborted,
+                "with_injected_errors": games_with_injected_errors,
+                "injected_by_code": injected_by_code,
+            }
+
+            producer_states = []
+            for _, w in sorted(
+                active_workers.items(), key=lambda item: item[1].get("worker_index", 0)
+            ):
+                producer_states.extend(w["data"].get("producer_states", []))
+
+            master_proc = self._get_process_resources()
+            worker_cpu_sum = sum(
+                w["data"].get("process", {}).get("cpu_percent", 0.0)
+                for w in active_workers.values()
+            )
+            worker_mem_sum = sum(
+                w["data"].get("process", {}).get("memory_mb", 0.0)
+                for w in active_workers.values()
+            )
+
+            connected_workers_count = len(getattr(self.runner.clients, "ready", []))
+
+            process_telemetry = {
+                "cpu_percent": round(master_proc["cpu_percent"] + worker_cpu_sum, 1),
+                "memory_mb": round(master_proc["memory_mb"] + worker_mem_sum, 1),
+                "master": master_proc,
+                "workers_count": connected_workers_count,
+                "workers": [
+                    {
+                        "worker_index": w.get("worker_index", 0),
+                        "pid": w["data"].get("process", {}).get("pid"),
+                        "cpu_percent": w["data"]
+                        .get("process", {})
+                        .get("cpu_percent", 0.0),
+                        "memory_mb": w["data"]
+                        .get("process", {})
+                        .get("memory_mb", 0.0),
+                    }
+                    for _, w in sorted(
+                        active_workers.items(),
+                        key=lambda item: item[1].get("worker_index", 0),
+                    )
+                ],
+            }
+
         return {
             "timestamp": time.time(),
             "state": map_runner_state(self.runner.state),
@@ -155,35 +366,12 @@ class LoadController:
             "p95_response_time_ms": round(
                 total.get_response_time_percentile(0.95) or 0.0, 1
             ),
-            "games": {
-                "active": RUNTIME.counters.active_games,
-                "started": RUNTIME.counters.games_started,
-                "completed": RUNTIME.counters.games_completed,
-                "aborted": RUNTIME.counters.games_aborted,
-                "with_injected_errors": RUNTIME.counters.games_with_injected_errors,
-                "injected_by_code": dict(RUNTIME.counters.injected_by_code),
-            },
-            "producer_states": RUNTIME.get_producer_states(),
-            "process": self._get_process_resources(),
+            "games": games_telemetry,
+            "producer_states": producer_states,
+            "process": process_telemetry,
             "endpoints": endpoints,
             "estimates": RUNTIME.config.calculate_estimates(),
         }
-
-
-def find_available_port(start: int = 8100, end: int = 8999) -> int:
-    candidates = list(range(start, end + 1))
-    random.shuffle(candidates)
-    for port in candidates:
-        if port == 3000:
-            continue
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            try:
-                sock.bind(("127.0.0.1", port))
-                return port
-            except OSError:
-                continue
-    raise RuntimeError(f"No free port found in range {start}-{end}")
 
 
 def create_app(controller: LoadController) -> Flask:
@@ -247,8 +435,9 @@ def create_app(controller: LoadController) -> Flask:
 
 
 def main() -> None:
+    default_workers = min(os.cpu_count() or 4, 12)
     parser = argparse.ArgumentParser(
-        description="ObserveLoL Locust Load Simulation Controller"
+        description="ObserveLoL Locust Load Simulation Master Controller"
     )
     parser.add_argument(
         "--host",
@@ -258,8 +447,25 @@ def main() -> None:
     parser.add_argument(
         "--port",
         type=int,
+        default=8400,
+        help="Port to bind (default: 8400)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=default_workers,
+        help=f"Number of worker processes to spawn (default: {default_workers})",
+    )
+    parser.add_argument(
+        "--master-port",
+        type=int,
         default=0,
-        help="Port to bind (default: randomly selected available port in 8100-8999)",
+        help="Internal ZeroMQ port for Master/Worker coordination (default: auto)",
+    )
+    parser.add_argument(
+        "--local",
+        action="store_true",
+        help="Run in single-process local runner mode instead of multi-worker mode",
     )
     parser.add_argument(
         "--target",
@@ -271,8 +477,12 @@ def main() -> None:
     if args.target:
         RUNTIME.config.target_host = args.target.rstrip("/")
 
-    port = args.port if args.port > 0 else find_available_port(8100, 8999)
-    controller = LoadController()
+    port = args.port
+    controller = LoadController(
+        num_workers=args.workers,
+        master_port=args.master_port,
+        local_mode=args.local,
+    )
     app = create_app(controller)
 
     url = f"http://{args.host}:{port}"
@@ -280,6 +490,11 @@ def main() -> None:
     print(" ObserveLoL Locust Load Simulation Controller")
     print(f" Dashboard URL : {url}")
     print(f" Target Host   : {RUNTIME.config.target_host}")
+    if controller.is_distributed:
+        print(f" Mode          : Distributed ({controller.num_workers} Worker Processes)")
+        print(f" Master ZMQ    : 127.0.0.1:{controller.master_port}")
+    else:
+        print(" Mode          : Local (Single Process)")
     print("=" * 64)
 
     server = WSGIServer((args.host, port), app, log=None)
@@ -288,6 +503,7 @@ def main() -> None:
     except KeyboardInterrupt:
         print("\nShutting down controller and stopping active swarm...")
         controller.stop_swarm()
+        controller.stop_workers()
 
 
 if __name__ == "__main__":
