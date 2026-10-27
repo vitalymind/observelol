@@ -4,13 +4,13 @@ mod redis;
 mod server;
 mod telemetry;
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 use dashmap::DashMap;
 
 use crate::{
     config::DispatcherConfig,
-    handlers::{AppState, build_router, new_http_client, spawn_reaper},
+    handlers::{AppState, FastUuidBuildHasher, build_router, new_http_client, spawn_reaper},
     redis::RedisStorage,
     server::serve_tls,
     telemetry::{DispatcherMetrics, init_telemetry},
@@ -29,7 +29,11 @@ async fn main() {
         storage,
         config: config.clone(),
         metrics: Arc::new(DispatcherMetrics::new()),
-        activity: Arc::new(DashMap::with_capacity(16_384)),
+        activity: Arc::new(DashMap::with_capacity_and_hasher(
+            16_384,
+            FastUuidBuildHasher::default(),
+        )),
+        epoch: Instant::now(),
         http_client: new_http_client(),
     };
 
