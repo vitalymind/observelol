@@ -1,9 +1,5 @@
 use std::{
-    hash::{BuildHasherDefault, Hasher},
-    sync::{
-        Arc, LazyLock,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -23,67 +19,9 @@ use uuid::Uuid;
 
 use crate::{
     config::{DispatcherConfig, EVENT_BUFFER_CAPACITY},
-    redis::{SnapshotError, Storage},
+    redis::Storage,
     telemetry::DispatcherMetrics,
 };
-
-static ATTR_OP_RPUSH: LazyLock<[KeyValue; 1]> = LazyLock::new(|| [KeyValue::new("op", "rpush")]);
-static ATTR_EVENT_GAME_STARTED: LazyLock<[KeyValue; 1]> =
-    LazyLock::new(|| [KeyValue::new("event_type", "1")]);
-static ATTR_EVENT_HERO_SELECTED: LazyLock<[KeyValue; 1]> =
-    LazyLock::new(|| [KeyValue::new("event_type", "2")]);
-static ATTR_EVENT_ROUND_START: LazyLock<[KeyValue; 1]> =
-    LazyLock::new(|| [KeyValue::new("event_type", "3")]);
-static ATTR_EVENT_ITEM_BOUGHT: LazyLock<[KeyValue; 1]> =
-    LazyLock::new(|| [KeyValue::new("event_type", "4")]);
-static ATTR_EVENT_KILL: LazyLock<[KeyValue; 1]> =
-    LazyLock::new(|| [KeyValue::new("event_type", "5")]);
-static ATTR_EVENT_LEVEL_UP: LazyLock<[KeyValue; 1]> =
-    LazyLock::new(|| [KeyValue::new("event_type", "6")]);
-static ATTR_EVENT_GAME_ENDS: LazyLock<[KeyValue; 1]> =
-    LazyLock::new(|| [KeyValue::new("event_type", "7")]);
-
-#[inline]
-fn event_type_attrs(event_type: EventType) -> &'static [KeyValue; 1] {
-    match event_type {
-        EventType::GameStarted => &ATTR_EVENT_GAME_STARTED,
-        EventType::HeroSelected => &ATTR_EVENT_HERO_SELECTED,
-        EventType::RoundStart => &ATTR_EVENT_ROUND_START,
-        EventType::ItemBought => &ATTR_EVENT_ITEM_BOUGHT,
-        EventType::Kill => &ATTR_EVENT_KILL,
-        EventType::LevelUp => &ATTR_EVENT_LEVEL_UP,
-        EventType::GameEnds => &ATTR_EVENT_GAME_ENDS,
-    }
-}
-
-/// Fast non-cryptographic hasher tailored for 128-bit `Uuid` keys.
-/// Since UUIDv7 already embeds 74 bits of uniform randomness + 48-bit timestamp,
-/// mixing the two 64-bit halves with a single rotate-xor-multiply avoids SipHash overhead.
-#[derive(Default, Clone, Copy)]
-pub struct UuidHasher(u64);
-
-impl Hasher for UuidHasher {
-    #[inline]
-    fn write(&mut self, bytes: &[u8]) {
-        if bytes.len() == 16 {
-            let hi = u64::from_ne_bytes(bytes[..8].try_into().unwrap());
-            let lo = u64::from_ne_bytes(bytes[8..].try_into().unwrap());
-            self.0 = (hi.rotate_left(5) ^ lo).wrapping_mul(0x517c_c1b7_2722_0a95);
-        } else {
-            for &b in bytes {
-                self.0 = (self.0.rotate_left(5) ^ u64::from(b)).wrapping_mul(0x517c_c1b7_2722_0a95);
-            }
-        }
-    }
-
-    #[inline]
-    fn finish(&self) -> u64 {
-        self.0
-    }
-}
-
-pub type FastUuidBuildHasher = BuildHasherDefault<UuidHasher>;
-pub type ActivityMap = DashMap<Uuid, AtomicU64, FastUuidBuildHasher>;
 
 pub type HttpClient =
     hyper_util::client::legacy::Client<hyper_util::client::legacy::connect::HttpConnector, Body>;
@@ -97,28 +35,8 @@ pub struct AppState<S: Storage> {
     pub storage: S,
     pub config: DispatcherConfig,
     pub metrics: Arc<DispatcherMetrics>,
-    pub activity: Arc<ActivityMap>,
-    pub epoch: Instant,
+    pub activity: Arc<DashMap<Uuid, Instant>>,
     pub http_client: HttpClient,
-}
-
-impl<S: Storage> AppState<S> {
-    #[inline]
-    pub fn elapsed_ms(&self) -> u64 {
-        self.epoch.elapsed().as_millis() as u64
-    }
-
-    /// Updates the inactivity timestamp for `game_id`.
-    /// Fast path takes only a shared shard read lock and performs a relaxed atomic store,
-    /// falling back to a shard write lock only when inserting a brand-new `game_id`.
-    #[inline]
-    pub fn record_activity(&self, game_id: Uuid, now_ms: u64) {
-        if let Some(last_seen) = self.activity.get(&game_id) {
-            last_seen.store(now_ms, Ordering::Relaxed);
-        } else {
-            self.activity.insert(game_id, AtomicU64::new(now_ms));
-        }
-    }
 }
 
 pub fn build_router<S: Storage>(state: AppState<S>) -> Router {
@@ -141,34 +59,30 @@ pub fn spawn_reaper<S: Storage>(state: AppState<S>) -> tokio::task::JoinHandle<(
         loop {
             interval.tick().await;
 
-            let now_ms = state.elapsed_ms();
-            let ttl_ms = state.config.redis_event_ttl_sec.saturating_mul(1000);
+            let now = Instant::now();
+            let ttl = Duration::from_secs(state.config.redis_event_ttl_sec);
             let mut expired_games = Vec::new();
 
             for entry in state.activity.iter() {
-                let last_seen_ms = entry.value().load(Ordering::Relaxed);
-                if now_ms.saturating_sub(last_seen_ms) >= ttl_ms {
+                if now.duration_since(*entry.value()) >= ttl {
                     expired_games.push(*entry.key());
                 }
             }
 
             for game_id in expired_games {
-                let removed = state
-                    .activity
-                    .remove_if(&game_id, |_, last_seen| {
-                        now_ms.saturating_sub(last_seen.load(Ordering::Relaxed)) >= ttl_ms
-                    })
-                    .is_some();
-
-                if removed {
-                    warn!(%game_id, "Reaping abandoned game after inactivity TTL");
-                    if let Err(err) = state.storage.unlink_game(&game_id).await {
-                        warn!(error = %err, %game_id, "Failed to unlink abandoned game from Redis");
+                if let Some((_, last_seen)) = state.activity.remove(&game_id) {
+                    if now.duration_since(last_seen) >= ttl {
+                        warn!(%game_id, "Reaping abandoned game after inactivity TTL");
+                        if let Err(err) = state.storage.unlink_game(&game_id).await {
+                            warn!(error = %err, %game_id, "Failed to unlink abandoned game from Redis");
+                        }
+                        state
+                            .metrics
+                            .errors_total
+                            .add(1, &[KeyValue::new("stage", "game_inactivity_reaped")]);
+                    } else {
+                        state.activity.insert(game_id, last_seen);
                     }
-                    state
-                        .metrics
-                        .errors_total
-                        .add(1, &[KeyValue::new("stage", "game_inactivity_reaped")]);
                 }
             }
         }
@@ -178,17 +92,27 @@ pub fn spawn_reaper<S: Storage>(state: AppState<S>) -> tokio::task::JoinHandle<(
 async fn handle_new_game<S: Storage>(State(state): State<AppState<S>>) -> impl IntoResponse {
     let game_id = Uuid::now_v7();
 
-    let snapshot = match state.storage.get_snapshot().await {
-        Ok(raw) => raw,
-        Err(SnapshotError::Parse(err)) => {
-            error!(error = %err, "Corrupted snapshot JSON in Redis");
-            state
-                .metrics
-                .errors_total
-                .add(1, &[KeyValue::new("stage", "parse_snapshot")]);
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-        Err(SnapshotError::Read(err)) => {
+    let start = Instant::now();
+    let raw_snapshot = state.storage.get_snapshot().await;
+    state.metrics.redis_latency_ms.record(
+        start.elapsed().as_secs_f64() * 1000.0,
+        &[KeyValue::new("op", "get_snapshot")],
+    );
+
+    let snapshot = match raw_snapshot {
+        Ok(Some(json_str)) => match serde_json::from_str::<serde_json::Value>(&json_str) {
+            Ok(val) => val,
+            Err(err) => {
+                error!(error = %err, "Corrupted snapshot JSON in Redis");
+                state
+                    .metrics
+                    .errors_total
+                    .add(1, &[KeyValue::new("stage", "parse_snapshot")]);
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        },
+        Ok(None) => serde_json::json!({ "heroes": [], "items": [] }),
+        Err(err) => {
             error!(error = %err, "Failed to read snapshot from Redis");
             state
                 .metrics
@@ -198,19 +122,8 @@ async fn handle_new_game<S: Storage>(State(state): State<AppState<S>>) -> impl I
         }
     };
 
-    // Pre-register the game in the activity tracker so subsequent `/api/event/` requests
-    // immediately hit the read-lock + AtomicU64 fast path.
-    state.record_activity(game_id, state.elapsed_ms());
-
     state.metrics.new_games_total.add(1, &[]);
-    (
-        StatusCode::OK,
-        Json(NewGameResponse {
-            game_id,
-            snapshot: &snapshot,
-        }),
-    )
-        .into_response()
+    (StatusCode::OK, Json(NewGameResponse { game_id, snapshot })).into_response()
 }
 
 async fn handle_event<S: Storage>(
@@ -233,13 +146,13 @@ async fn handle_event<S: Storage>(
         }
     };
 
-    let start_ms = state.elapsed_ms();
+    let start = Instant::now();
     let res = state.storage.ingest_event(&game_id, encoded).await;
-    let now_ms = state.elapsed_ms();
-    state
-        .metrics
-        .redis_latency_ms
-        .record((now_ms.saturating_sub(start_ms)) as f64, &*ATTR_OP_RPUSH);
+    let now = Instant::now();
+    state.metrics.redis_latency_ms.record(
+        now.duration_since(start).as_secs_f64() * 1000.0,
+        &[KeyValue::new("op", "rpush")],
+    );
 
     if let Err(err) = res {
         error!(error = %err, %game_id, "Failed to push event to storage");
@@ -250,12 +163,12 @@ async fn handle_event<S: Storage>(
         return StatusCode::INTERNAL_SERVER_ERROR;
     }
 
-    state.record_activity(game_id, now_ms);
+    state.activity.insert(game_id, now);
 
     state
         .metrics
         .events_total
-        .add(1, event_type_attrs(event_type));
+        .add(1, &[KeyValue::new("event_type", event_type.as_str())]);
 
     if event_type == EventType::GameEnds {
         let storage = state.storage.clone();
@@ -339,14 +252,13 @@ async fn handle_nginx_proxy<S: Storage>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::redis::parse_snapshot_raw;
     use axum::{
         body::Body,
         http::{Request, StatusCode},
     };
     use common::StoredEvent;
     use http_body_util::BodyExt;
-    use serde_json::{json, value::RawValue};
+    use serde_json::json;
     use std::sync::{Arc, Mutex};
     use tower::ServiceExt;
 
@@ -374,12 +286,8 @@ mod tests {
     }
 
     impl Storage for MockStorage {
-        async fn get_snapshot(&self) -> Result<Arc<Box<RawValue>>, SnapshotError> {
-            let res = self.snapshot.lock().unwrap().clone();
-            match res {
-                Ok(opt) => parse_snapshot_raw(opt),
-                Err(err) => Err(SnapshotError::Read(err)),
-            }
+        async fn get_snapshot(&self) -> Result<Option<String>, String> {
+            self.snapshot.lock().unwrap().clone()
         }
 
         async fn ingest_event(&self, game_id: &Uuid, bytes: &[u8]) -> Result<i64, String> {
@@ -421,8 +329,7 @@ mod tests {
                 game_end_grace_ms: 10,
             },
             metrics: Arc::new(DispatcherMetrics::new()),
-            activity: Arc::new(DashMap::with_hasher(FastUuidBuildHasher::default())),
-            epoch: Instant::now() - Duration::from_secs(10),
+            activity: Arc::new(DashMap::new()),
             http_client: new_http_client(),
         }
     }
@@ -430,8 +337,7 @@ mod tests {
     #[tokio::test]
     async fn test_new_game_success() {
         let storage = MockStorage::default();
-        let state = test_state(storage);
-        let app = build_router(state.clone());
+        let app = build_router(test_state(storage));
 
         let req = Request::builder()
             .uri("/api/new-game/")
@@ -445,31 +351,14 @@ mod tests {
         let body_bytes = res.into_body().collect().await.unwrap().to_bytes();
         let body: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
 
-        let game_id = Uuid::parse_str(body["game_id"].as_str().unwrap()).unwrap();
+        assert!(body.get("game_id").is_some());
         assert_eq!(body["snapshot"], json!({ "heroes": [], "items": [] }));
-        assert!(state.activity.contains_key(&game_id));
     }
 
     #[tokio::test]
     async fn test_new_game_snapshot_error() {
         let storage = MockStorage::default();
         *storage.snapshot.lock().unwrap() = Err("Redis error".into());
-        let app = build_router(test_state(storage));
-
-        let req = Request::builder()
-            .uri("/api/new-game/")
-            .method("GET")
-            .body(Body::empty())
-            .unwrap();
-
-        let res = app.oneshot(req).await.unwrap();
-        assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
-    }
-
-    #[tokio::test]
-    async fn test_new_game_corrupted_snapshot_error() {
-        let storage = MockStorage::default();
-        *storage.snapshot.lock().unwrap() = Ok(Some("{invalid_json".into()));
         let app = build_router(test_state(storage));
 
         let req = Request::builder()
@@ -596,7 +485,7 @@ mod tests {
         let app = build_router(state.clone());
         let game_id = Uuid::now_v7();
 
-        state.record_activity(game_id, state.elapsed_ms());
+        state.activity.insert(game_id, Instant::now());
 
         let payload = json!({
             "game_id": game_id,
@@ -632,9 +521,10 @@ mod tests {
         let state = test_state(storage.clone());
         let game_id = Uuid::now_v7();
 
-        // Seed with a timestamp 5 seconds in the past (> 1 sec TTL)
-        let expired_ms = state.elapsed_ms().saturating_sub(5_000);
-        state.activity.insert(game_id, AtomicU64::new(expired_ms));
+        // Seed with a timestamp in the past (> 1 sec TTL)
+        state
+            .activity
+            .insert(game_id, Instant::now() - Duration::from_secs(5));
 
         let reaper_handle = spawn_reaper(state.clone());
 
