@@ -93,11 +93,14 @@ class LoadController:
     def stop_swarm(self) -> Dict[str, Any]:
         if map_runner_state(self.runner.state) != "IDLE":
             self.runner.stop()
+        RUNTIME.reset_producers()
         return self.get_telemetry()
 
     def reset_stats(self) -> Dict[str, Any]:
         self.env.stats.reset_all()
         RUNTIME.counters.reset()
+        if map_runner_state(self.runner.state) == "IDLE":
+            RUNTIME.reset_producers()
         return self.get_telemetry()
 
     def _get_process_resources(self) -> Dict[str, float]:
@@ -160,6 +163,7 @@ class LoadController:
                 "with_injected_errors": RUNTIME.counters.games_with_injected_errors,
                 "injected_by_code": dict(RUNTIME.counters.injected_by_code),
             },
+            "producer_states": RUNTIME.get_producer_states(),
             "process": self._get_process_resources(),
             "endpoints": endpoints,
             "estimates": RUNTIME.config.calculate_estimates(),

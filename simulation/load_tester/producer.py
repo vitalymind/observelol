@@ -3,7 +3,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict
+from typing import Dict, List
 
 REPO_ROOT = str(Path(__file__).resolve().parents[2])
 if REPO_ROOT not in sys.path:
@@ -41,6 +41,37 @@ class SimulationRuntime:
     def __init__(self) -> None:
         self.config: SimulationConfig = SimulationConfig()
         self.counters: SimulationCounters = SimulationCounters()
+        self._producer_states: Dict[int, float] = {}
+        self._free_ids: set[int] = set()
+        self._next_id: int = 0
+
+    def register_producer(self) -> int:
+        if self._free_ids:
+            pid = min(self._free_ids)
+            self._free_ids.remove(pid)
+        else:
+            pid = self._next_id
+            self._next_id += 1
+        self._producer_states[pid] = 0.0
+        return pid
+
+    def unregister_producer(self, pid: int) -> None:
+        self._producer_states.pop(pid, None)
+        self._free_ids.add(pid)
+
+    def set_producer_progress(self, pid: int, progress: float) -> None:
+        self._producer_states[pid] = max(0.0, min(1.0, progress))
+
+    def get_producer_states(self) -> List[float]:
+        if not self._producer_states:
+            return []
+        max_id = max(self._producer_states.keys())
+        return [round(self._producer_states.get(i, 0.0), 2) for i in range(max_id + 1)]
+
+    def reset_producers(self) -> None:
+        self._producer_states.clear()
+        self._free_ids.clear()
+        self._next_id = 0
 
 
 RUNTIME = SimulationRuntime()
@@ -59,7 +90,12 @@ class GameProducerUser(FastHttpUser):
     max_retries = 1
 
     def on_start(self) -> None:
+        self.producer_id = RUNTIME.register_producer()
         self._initial_delay_done = False
+
+    def on_stop(self) -> None:
+        if hasattr(self, "producer_id"):
+            RUNTIME.unregister_producer(self.producer_id)
 
     def _is_stopping(self) -> bool:
         runner = getattr(self.environment, "runner", None)
@@ -91,6 +127,7 @@ class GameProducerUser(FastHttpUser):
             return
 
         cfg = RUNTIME.config
+        RUNTIME.set_producer_progress(self.producer_id, 0.0)
 
         if not getattr(self, "_initial_delay_done", False):
             self._initial_delay_done = True
@@ -123,6 +160,7 @@ class GameProducerUser(FastHttpUser):
 
         # 2. Build scheduled event timeline and apply configured error injections
         timeline, injected_errors = generate_game_plan(game_id, snapshot, cfg)
+        total_duration_ms = timeline[-1].schedule_ms if timeline else 1
 
         RUNTIME.counters.games_started += 1
         RUNTIME.counters.active_games += 1
@@ -139,6 +177,13 @@ class GameProducerUser(FastHttpUser):
         try:
             # 3. Stream events over persistent Keep-Alive connection
             for scheduled_ev in timeline:
+                progress = (
+                    min(0.99, scheduled_ev.schedule_ms / total_duration_ms)
+                    if total_duration_ms > 0
+                    else 0.0
+                )
+                RUNTIME.set_producer_progress(self.producer_id, progress)
+
                 target_wall = game_start_wall + (scheduled_ev.schedule_ms / 1000.0)
                 delay_sec = target_wall - time.perf_counter()
                 if delay_sec > 0:
@@ -162,5 +207,8 @@ class GameProducerUser(FastHttpUser):
             RUNTIME.counters.active_games = max(0, RUNTIME.counters.active_games - 1)
             if completed_cleanly:
                 RUNTIME.counters.games_completed += 1
+                RUNTIME.set_producer_progress(self.producer_id, 1.0)
+                gevent.sleep(0.4)
             else:
                 RUNTIME.counters.games_aborted += 1
+                RUNTIME.set_producer_progress(self.producer_id, 0.0)

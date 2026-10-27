@@ -725,7 +725,7 @@
             "uid": "prometheus"
           },
           "expr": "sum by (instance) (rate(worker_games_processed_total[15s]))",
-          "legendFormat": "Worker {{instance}}",
+          "legendFormat": "Worker",
           "refId": "A",
           "interval": "5s"
         }
