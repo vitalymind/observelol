@@ -151,7 +151,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(worker_processing_latency_ms_bucket[1m]))) or vector(0)",
+          "expr": "(histogram_quantile(0.95, sum by (le) (rate(worker_processing_latency_ms_bucket[1m]))) >= 0) or vector(0)",
           "refId": "A"
         }
       ],
@@ -223,50 +223,189 @@
     },
     {
       "id": 8,
-      "title": "VM Memory Utilization (0 - 1.0)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "title": "Ingest VM Memory (Used / Total)",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 4, "x": 12, "y": 6 },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)",
-          "legendFormat": "{{vm}}",
+          "expr": "(node_memory_MemTotal_bytes{vm=\"ingest\"} - node_memory_MemAvailable_bytes{vm=\"ingest\"}) / (1024 * 1024 * 1024)",
+          "legendFormat": "Used",
           "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "node_memory_MemTotal_bytes{vm=\"ingest\"} / (1024 * 1024 * 1024)",
+          "legendFormat": "Total",
+          "refId": "B"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": { "id": "byName", "options": "Used" },
+            "configRefId": "B",
+            "mappings": [
+              {
+                "fieldName": "Total",
+                "handlerKey": "max",
+                "reducerId": "lastNotNull"
+              }
+            ]
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["Used"]
+            }
+          }
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit",
+          "unit": "decgbytes",
+          "decimals": 2,
           "min": 0,
-          "max": 1,
-          "custom": {
-            "drawStyle": "line",
-            "lineInterpolation": "smooth",
-            "lineWidth": 2,
-            "fillOpacity": 15
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "#5794F2", "value": null }]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": false
+      }
+    },
+    {
+      "id": 12,
+      "title": "Control VM Memory (Used / Total)",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 4, "x": 16, "y": 6 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "(node_memory_MemTotal_bytes{vm=\"control\"} - node_memory_MemAvailable_bytes{vm=\"control\"}) / (1024 * 1024 * 1024)",
+          "legendFormat": "Used",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "node_memory_MemTotal_bytes{vm=\"control\"} / (1024 * 1024 * 1024)",
+          "legendFormat": "Total",
+          "refId": "B"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": { "id": "byName", "options": "Used" },
+            "configRefId": "B",
+            "mappings": [
+              {
+                "fieldName": "Total",
+                "handlerKey": "max",
+                "reducerId": "lastNotNull"
+              }
+            ]
           }
         },
-        "overrides": [
-          {
-            "matcher": { "id": "byName", "options": "ingest" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "#5794F2", "mode": "fixed" } }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "worker" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "#FADE2A", "mode": "fixed" } }]
-          },
-          {
-            "matcher": { "id": "byName", "options": "control" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "#B877D9", "mode": "fixed" } }]
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["Used"]
+            }
           }
-        ]
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decgbytes",
+          "decimals": 2,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "#B877D9", "value": null }]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": false
+      }
+    },
+    {
+      "id": 13,
+      "title": "Worker VM Memory (Used / Total)",
+      "type": "gauge",
+      "gridPos": { "h": 8, "w": 4, "x": 20, "y": 6 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "(node_memory_MemTotal_bytes{vm=\"worker\"} - node_memory_MemAvailable_bytes{vm=\"worker\"}) / (1024 * 1024 * 1024)",
+          "legendFormat": "Used",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "node_memory_MemTotal_bytes{vm=\"worker\"} / (1024 * 1024 * 1024)",
+          "legendFormat": "Total",
+          "refId": "B"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "configFromData",
+          "options": {
+            "applyTo": { "id": "byName", "options": "Used" },
+            "configRefId": "B",
+            "mappings": [
+              {
+                "fieldName": "Total",
+                "handlerKey": "max",
+                "reducerId": "lastNotNull"
+              }
+            ]
+          }
+        },
+        {
+          "id": "filterFieldsByName",
+          "options": {
+            "include": {
+              "names": ["Used"]
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decgbytes",
+          "decimals": 2,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "#FADE2A", "value": null }]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": false
       }
     },
     {
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
       "id": 102,
-      "title": "Worker Replicas & Redis Performance",
+      "title": "Worker Replicas & Storage Latency",
       "type": "row"
     },
     {
@@ -277,8 +416,8 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum by (service_instance_id) (rate(worker_games_processed_total[1m]))",
-          "legendFormat": "Worker {{service_instance_id}}",
+          "expr": "sum by (instance) (rate(worker_games_processed_total[1m]))",
+          "legendFormat": "Worker {{instance}}",
           "refId": "A"
         }
       ],
@@ -303,26 +442,33 @@
     },
     {
       "id": 10,
-      "title": "Redis Latency Comparison (p95)",
+      "title": "Redis & DB Latency Comparison (p95)",
       "type": "timeseries",
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 15 },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(ingest_redis_latency_ms_bucket[1m])))",
-          "legendFormat": "Dispatcher Write (RPUSH)",
+          "expr": "(histogram_quantile(0.95, sum by (le) (rate(ingest_redis_latency_ms_bucket[1m]))) >= 0) or vector(0)",
+          "legendFormat": "Dispatcher Redis Write (RPUSH)",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(worker_redis_latency_ms_bucket[1m])))",
-          "legendFormat": "Worker Read/Ack",
+          "expr": "(histogram_quantile(0.95, sum by (le) (rate(worker_redis_latency_ms_bucket{op!=\"xreadgroup\"}[1m]))) >= 0) or vector(0)",
+          "legendFormat": "Worker Redis Read/Ack",
           "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "(histogram_quantile(0.95, sum by (le) (rate(worker_db_latency_ms_bucket[1m]))) >= 0) or vector(0)",
+          "legendFormat": "Worker DB Write",
+          "refId": "C"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "ms",
+          "min": 0,
           "custom": {
             "drawStyle": "line",
             "lineWidth": 2
@@ -339,9 +485,9 @@
     },
     {
       "id": 11,
-      "title": "Validation Failures by Error Code",
+      "title": "Validation Failures by Error Code (Last 1h)",
       "type": "table",
-      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 23 },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 23 },
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -370,6 +516,42 @@
             "properties": [{ "id": "displayName", "value": "Error Code" }]
           }
         ]
+      }
+    },
+    {
+      "id": 14,
+      "title": "System Errors & Dropped Games (Last 1h)",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 23 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (stage) (rate(ingest_errors_total[1m])) or vector(0)",
+          "legendFormat": "Ingest Error ({{stage}})",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (stage) (rate(worker_errors_total[1m])) or vector(0)",
+          "legendFormat": "Worker Error ({{stage}})",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (reason) (rate(worker_dropped_games_total[1m])) or vector(0)",
+          "legendFormat": "Dropped Games ({{reason}})",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2
+          }
+        }
       }
     }
   ],

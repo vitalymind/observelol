@@ -33,6 +33,7 @@ runs:
           OTEL_LGTM_IMAGE=.container_images.otel_lgtm
           NODE_EXPORTER_IMAGE=.container_images.node_exporter
           OTEL_GRPC_PORT=.ingest_config.otel_grpc_port
+          OTEL_SCRAPE_INTERVAL=.ingest_config.otel_scrape_interval
         vars: |
           INGEST_HOST=${{ inputs.ingest_host }}
           CONTROL_HOST=${{ inputs.control_host }}

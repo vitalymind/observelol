@@ -76,6 +76,8 @@ ingest_config:
   game_end_grace_ms: 1000
   control_port: 3000
   otel_grpc_port: 4317
+  otel_export_interval_ms: 5000
+  otel_scrape_interval: "5s"
 
 # Worker configuration
 worker_config:
