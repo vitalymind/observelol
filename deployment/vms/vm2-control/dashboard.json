@@ -11,7 +11,12 @@
   "panels": [
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
       "id": 100,
       "title": "Ingestion & Worker KPIs",
       "type": "row"
@@ -20,139 +25,245 @@
       "id": 1,
       "title": "Event Ingest Rate",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 1
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum(rate(ingest_events_total[1m])) or vector(0)",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 500 },
-              { "color": "red", "value": 2000 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 2000
+              }
             ]
           }
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "graphMode": "area"
-      }
+      },
+      "interval": "5s"
     },
     {
       "id": 2,
       "title": "Total Ingested Events",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 1
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum(ingest_events_total) or vector(0)",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "color": { "fixedColor": "blue", "mode": "fixed" }
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          }
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "graphMode": "none"
-      }
+      },
+      "interval": "5s"
     },
     {
       "id": 3,
       "title": "New Games / sec",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 1
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum(rate(ingest_new_games_total[1m])) or vector(0)",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "reqps",
-          "color": { "fixedColor": "purple", "mode": "fixed" }
+          "color": {
+            "fixedColor": "purple",
+            "mode": "fixed"
+          }
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "graphMode": "area"
-      }
+      },
+      "interval": "5s"
     },
     {
       "id": 4,
       "title": "Games Processed / sec",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 1
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum(rate(worker_games_processed_total[1m])) or vector(0)",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "ops",
-          "color": { "mode": "palette-classic" },
+          "color": {
+            "mode": "palette-classic"
+          },
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "green", "value": null }]
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
           }
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "graphMode": "area"
-      }
+      },
+      "interval": "5s"
     },
     {
       "id": 5,
       "title": "Total Completed Games",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 1
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum(worker_games_processed_total) or vector(0)",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "color": { "fixedColor": "green", "mode": "fixed" }
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          }
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "graphMode": "none"
-      }
+      },
+      "interval": "5s"
     },
     {
       "id": 6,
       "title": "Worker Latency (p95)",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 1
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "(histogram_quantile(0.95, sum by (le) (rate(worker_processing_latency_ms_bucket[1m]))) >= 0) or vector(0)",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -161,21 +272,40 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 50 },
-              { "color": "red", "value": 200 }
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "red",
+                "value": 200
+              }
             ]
           }
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "graphMode": "area"
-      }
+      },
+      "interval": "5s"
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
       "id": 101,
       "title": "Virtual Machine Resources",
       "type": "row"
@@ -184,13 +314,22 @@
       "id": 7,
       "title": "VM CPU Utilization (0 - 1.0)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "1 - (avg by (vm) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m])))",
           "legendFormat": "{{vm}}",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -207,44 +346,94 @@
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "ingest" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "#5794F2", "mode": "fixed" } }]
+            "matcher": {
+              "id": "byName",
+              "options": "ingest"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#5794F2",
+                  "mode": "fixed"
+                }
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "worker" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "#FADE2A", "mode": "fixed" } }]
+            "matcher": {
+              "id": "byName",
+              "options": "worker"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#FADE2A",
+                  "mode": "fixed"
+                }
+              }
+            ]
           },
           {
-            "matcher": { "id": "byName", "options": "control" },
-            "properties": [{ "id": "color", "value": { "fixedColor": "#B877D9", "mode": "fixed" } }]
+            "matcher": {
+              "id": "byName",
+              "options": "control"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#B877D9",
+                  "mode": "fixed"
+                }
+              }
+            ]
           }
         ]
-      }
+      },
+      "interval": "5s"
     },
     {
       "id": 8,
       "title": "Ingest VM Memory (Used / Total)",
       "type": "gauge",
-      "gridPos": { "h": 8, "w": 4, "x": 12, "y": 6 },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 12,
+        "y": 6
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "(node_memory_MemTotal_bytes{vm=\"ingest\"} - node_memory_MemAvailable_bytes{vm=\"ingest\"}) / (1024 * 1024 * 1024)",
           "legendFormat": "Used",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "node_memory_MemTotal_bytes{vm=\"ingest\"} / (1024 * 1024 * 1024)",
           "legendFormat": "Total",
-          "refId": "B"
+          "refId": "B",
+          "interval": "5s"
         }
       ],
       "transformations": [
         {
           "id": "configFromData",
           "options": {
-            "applyTo": { "id": "byName", "options": "Used" },
+            "applyTo": {
+              "id": "byName",
+              "options": "Used"
+            },
             "configRefId": "B",
             "mappings": [
               {
@@ -259,7 +448,9 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": ["Used"]
+              "names": [
+                "Used"
+              ]
             }
           }
         }
@@ -271,40 +462,66 @@
           "min": 0,
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "#5794F2", "value": null }]
+            "steps": [
+              {
+                "color": "#5794F2",
+                "value": null
+              }
+            ]
           }
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "showThresholdLabels": true,
         "showThresholdMarkers": false
-      }
+      },
+      "interval": "5s"
     },
     {
       "id": 12,
       "title": "Control VM Memory (Used / Total)",
       "type": "gauge",
-      "gridPos": { "h": 8, "w": 4, "x": 16, "y": 6 },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 16,
+        "y": 6
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "(node_memory_MemTotal_bytes{vm=\"control\"} - node_memory_MemAvailable_bytes{vm=\"control\"}) / (1024 * 1024 * 1024)",
           "legendFormat": "Used",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "node_memory_MemTotal_bytes{vm=\"control\"} / (1024 * 1024 * 1024)",
           "legendFormat": "Total",
-          "refId": "B"
+          "refId": "B",
+          "interval": "5s"
         }
       ],
       "transformations": [
         {
           "id": "configFromData",
           "options": {
-            "applyTo": { "id": "byName", "options": "Used" },
+            "applyTo": {
+              "id": "byName",
+              "options": "Used"
+            },
             "configRefId": "B",
             "mappings": [
               {
@@ -319,7 +536,9 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": ["Used"]
+              "names": [
+                "Used"
+              ]
             }
           }
         }
@@ -331,40 +550,66 @@
           "min": 0,
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "#B877D9", "value": null }]
+            "steps": [
+              {
+                "color": "#B877D9",
+                "value": null
+              }
+            ]
           }
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "showThresholdLabels": true,
         "showThresholdMarkers": false
-      }
+      },
+      "interval": "5s"
     },
     {
       "id": 13,
       "title": "Worker VM Memory (Used / Total)",
       "type": "gauge",
-      "gridPos": { "h": 8, "w": 4, "x": 20, "y": 6 },
+      "gridPos": {
+        "h": 8,
+        "w": 4,
+        "x": 20,
+        "y": 6
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "(node_memory_MemTotal_bytes{vm=\"worker\"} - node_memory_MemAvailable_bytes{vm=\"worker\"}) / (1024 * 1024 * 1024)",
           "legendFormat": "Used",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "node_memory_MemTotal_bytes{vm=\"worker\"} / (1024 * 1024 * 1024)",
           "legendFormat": "Total",
-          "refId": "B"
+          "refId": "B",
+          "interval": "5s"
         }
       ],
       "transformations": [
         {
           "id": "configFromData",
           "options": {
-            "applyTo": { "id": "byName", "options": "Used" },
+            "applyTo": {
+              "id": "byName",
+              "options": "Used"
+            },
             "configRefId": "B",
             "mappings": [
               {
@@ -379,7 +624,9 @@
           "id": "filterFieldsByName",
           "options": {
             "include": {
-              "names": ["Used"]
+              "names": [
+                "Used"
+              ]
             }
           }
         }
@@ -391,19 +638,34 @@
           "min": 0,
           "thresholds": {
             "mode": "absolute",
-            "steps": [{ "color": "#FADE2A", "value": null }]
+            "steps": [
+              {
+                "color": "#FADE2A",
+                "value": null
+              }
+            ]
           }
         }
       },
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "showThresholdLabels": true,
         "showThresholdMarkers": false
-      }
+      },
+      "interval": "5s"
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
       "id": 102,
       "title": "Worker Replicas & Storage Latency",
       "type": "row"
@@ -412,13 +674,22 @@
       "id": 9,
       "title": "Individual Worker Replicas Activity",
       "type": "gauge",
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 15 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 15
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum by (instance) (rate(worker_games_processed_total[1m]))",
           "legendFormat": "Worker {{instance}}",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -428,41 +699,71 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "blue", "value": null },
-              { "color": "green", "value": 1 },
-              { "color": "yellow", "value": 5 },
-              { "color": "red", "value": 15 }
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              },
+              {
+                "color": "yellow",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 15
+              }
             ]
           }
         }
       },
       "options": {
         "showThresholdMarkers": true
-      }
+      },
+      "interval": "5s"
     },
     {
       "id": 10,
       "title": "Redis & DB Latency Comparison (p95)",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 15 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 15
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "(histogram_quantile(0.95, sum by (le) (rate(ingest_redis_latency_ms_bucket[1m]))) >= 0) or vector(0)",
           "legendFormat": "Dispatcher Redis Write (RPUSH)",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "(histogram_quantile(0.95, sum by (le) (rate(worker_redis_latency_ms_bucket{op!=\"xreadgroup\"}[1m]))) >= 0) or vector(0)",
           "legendFormat": "Worker Redis Read/Ack",
-          "refId": "B"
+          "refId": "B",
+          "interval": "5s"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "(histogram_quantile(0.95, sum by (le) (rate(worker_db_latency_ms_bucket[1m]))) >= 0) or vector(0)",
           "legendFormat": "Worker DB Write",
-          "refId": "C"
+          "refId": "C",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -474,11 +775,17 @@
             "lineWidth": 2
           }
         }
-      }
+      },
+      "interval": "5s"
     },
     {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 },
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
       "id": 103,
       "title": "Validation & System Errors",
       "type": "row"
@@ -487,14 +794,23 @@
       "id": 11,
       "title": "Validation Failures by Error Code (Last 1h)",
       "type": "table",
-      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 23 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 23
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum by (error_code) (increase(worker_validation_failures_total[1h]))",
           "format": "table",
           "instant": true,
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -505,42 +821,77 @@
         },
         "overrides": [
           {
-            "matcher": { "id": "byName", "options": "Value" },
+            "matcher": {
+              "id": "byName",
+              "options": "Value"
+            },
             "properties": [
-              { "id": "displayName", "value": "Total Failures (Last 1h)" },
-              { "id": "unit", "value": "short" }
+              {
+                "id": "displayName",
+                "value": "Total Failures (Last 1h)"
+              },
+              {
+                "id": "unit",
+                "value": "short"
+              }
             ]
           },
           {
-            "matcher": { "id": "byName", "options": "error_code" },
-            "properties": [{ "id": "displayName", "value": "Error Code" }]
+            "matcher": {
+              "id": "byName",
+              "options": "error_code"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Error Code"
+              }
+            ]
           }
         ]
-      }
+      },
+      "interval": "5s"
     },
     {
       "id": 14,
       "title": "System Errors & Dropped Games (Last 1h)",
       "type": "timeseries",
-      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 23 },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 23
+      },
       "targets": [
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum by (stage) (rate(ingest_errors_total[1m])) or vector(0)",
           "legendFormat": "Ingest Error ({{stage}})",
-          "refId": "A"
+          "refId": "A",
+          "interval": "5s"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum by (stage) (rate(worker_errors_total[1m])) or vector(0)",
           "legendFormat": "Worker Error ({{stage}})",
-          "refId": "B"
+          "refId": "B",
+          "interval": "5s"
         },
         {
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum by (reason) (rate(worker_dropped_games_total[1m])) or vector(0)",
           "legendFormat": "Dropped Games ({{reason}})",
-          "refId": "C"
+          "refId": "C",
+          "interval": "5s"
         }
       ],
       "fieldConfig": {
@@ -552,13 +903,18 @@
             "lineWidth": 2
           }
         }
-      }
+      },
+      "interval": "5s"
     }
   ],
   "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["observelol"],
-  "templating": { "list": [] },
+  "tags": [
+    "observelol"
+  ],
+  "templating": {
+    "list": []
+  },
   "time": {
     "from": "now-15m",
     "to": "now"

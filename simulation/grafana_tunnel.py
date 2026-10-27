@@ -1,13 +1,37 @@
+import os
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "config.yml"
 LOCAL_PORT = 3000
 REMOTE_PORT = 3000
+RECONNECT_DELAY_SEC = 5
+
+
+def stop_process(proc: subprocess.Popen) -> None:
+    if proc.poll() is not None:
+        return
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        else:
+            proc.terminate()
+            proc.wait(timeout=5)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
 
 
 def main() -> None:
@@ -29,22 +53,53 @@ def main() -> None:
     cmd = [
         gcloud,
         "compute",
-        "start-iap-tunnel",
+        "ssh",
         vm_name,
-        str(REMOTE_PORT),
         f"--project={project_id}",
         f"--zone={zone}",
-        f"--local-host-port=localhost:{LOCAL_PORT}",
+        "--tunnel-through-iap",
+        "--",
+        "-N",
+        "-L",
+        f"localhost:{LOCAL_PORT}:localhost:{REMOTE_PORT}",
+        "-o",
+        "ServerAliveInterval=15",
+        "-o",
+        "ServerAliveCountMax=3",
+        "-o",
+        "ExitOnForwardFailure=yes",
     ]
 
-    print(f"Opening IAP tunnel to {vm_name}:{REMOTE_PORT} ({zone})...")
-    print(f"Grafana UI: http://localhost:{LOCAL_PORT}")
+    print(f"Target SSH IAP tunnel: {vm_name}:{REMOTE_PORT} ({zone})")
+    print(f"Grafana UI:            http://localhost:{LOCAL_PORT}")
     print("Press Ctrl+C to close the tunnel.\n")
 
+    proc = None
     try:
-        subprocess.run(cmd, check=True)
+        while True:
+            try:
+                print("Starting multiplexed SSH tunnel...")
+                proc = subprocess.Popen(cmd)
+                return_code = proc.wait()
+                print(
+                    f"\nSSH tunnel exited (code {return_code}). "
+                    f"Reconnecting in {RECONNECT_DELAY_SEC}s..."
+                )
+            except OSError as err:
+                print(
+                    f"\nFailed to launch gcloud ({err}). "
+                    f"Retrying in {RECONNECT_DELAY_SEC}s..."
+                )
+            finally:
+                if proc is not None:
+                    stop_process(proc)
+                    proc = None
+
+            time.sleep(RECONNECT_DELAY_SEC)
     except KeyboardInterrupt:
-        print("\nTunnel closed.")
+        if proc is not None:
+            stop_process(proc)
+        print("\nTunnel closed gracefully.")
 
 
 if __name__ == "__main__":

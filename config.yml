@@ -44,7 +44,7 @@ infra_definitions:
       type: pd-balanced
   control_vm:
     name: "control"
-    type: e2-small
+    type: e2-medium
     image: cos-cloud/cos-stable
     boot_disk:
       size: 10
