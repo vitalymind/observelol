@@ -30,7 +30,7 @@ infra_definitions:
   subnet: "observelol-subnet"
   ingest_vm:
     name: "ingest"
-    type: e2-small
+    type: e2-medium
     image: cos-cloud/cos-stable
     boot_disk:
       size: 10
@@ -63,7 +63,7 @@ ci_versions:
 container_images:
   redis: "redis:7-alpine"
   nginx: "nginx:1.30-alpine"
-  node_exporter: "prom/node-exporter:v1.9.0"
+  cadvisor: "gcr.io/cadvisor/cadvisor:v0.49.1"
   otel_lgtm: "grafana/otel-lgtm:0.38.1"
   rust_builder: "rust:1.99-slim-bookworm"
   debian_runtime: "debian:bookworm-slim"

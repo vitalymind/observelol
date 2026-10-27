@@ -6,19 +6,19 @@ receivers:
       http:
         endpoint: 0.0.0.0:4318
 
-  prometheus/node_exporter:
+  prometheus/cadvisor:
     config:
       scrape_configs:
-        - job_name: "node-exporter"
+        - job_name: "cadvisor"
           scrape_interval: ${env:OTEL_SCRAPE_INTERVAL}
           static_configs:
-            - targets: ["${env:INGEST_HOST}:9100"]
+            - targets: ["${env:INGEST_HOST}:8080"]
               labels:
                 vm: "ingest"
-            - targets: ["${env:CONTROL_HOST}:9100"]
+            - targets: ["${env:CONTROL_HOST}:8080"]
               labels:
                 vm: "control"
-            - targets: ["${env:WORKER_HOST}:9100"]
+            - targets: ["${env:WORKER_HOST}:8080"]
               labels:
                 vm: "worker"
 
@@ -52,7 +52,7 @@ service:
       processors: [batch]
       exporters: [otlp_http/traces]
     metrics:
-      receivers: [otlp, prometheus/node_exporter]
+      receivers: [otlp, prometheus/cadvisor]
       processors: [batch]
       exporters: [otlp_http/metrics]
     logs:

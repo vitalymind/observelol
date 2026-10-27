@@ -30,7 +30,7 @@ async fn main() {
         "Starting ObserveLoL Worker"
     );
 
-    let redis = RedisStreamClient::connect_with_retry(&config.redis_url).await;
+    let redis = RedisStreamClient::connect_with_retry(&config.redis_url, config.block_ms).await;
     let db = WorkerDatabase::connect(&config).await;
 
     let state = AppState {

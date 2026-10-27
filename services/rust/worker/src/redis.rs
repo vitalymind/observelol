@@ -3,7 +3,7 @@ use std::time::Duration;
 use common::{READY_GAMES_STREAM, WORKERS_CONSUMER_GROUP, game_events_key};
 use redis::{
     AsyncCommands, FromRedisValue, Value,
-    aio::ConnectionManager,
+    aio::{ConnectionManager, ConnectionManagerConfig},
     streams::{StreamAutoClaimReply, StreamId, StreamReadReply},
 };
 use tracing::{info, warn};
@@ -82,11 +82,11 @@ pub struct RedisStreamClient {
 }
 
 impl RedisStreamClient {
-    pub async fn connect_with_retry(redis_url: &str) -> Self {
+    pub async fn connect_with_retry(redis_url: &str, block_ms: usize) -> Self {
         let retry_delay = Duration::from_secs(2);
 
         loop {
-            match Self::try_connect(redis_url).await {
+            match Self::try_connect(redis_url, block_ms).await {
                 Ok(client) => return client,
                 Err(err) => {
                     warn!(
@@ -99,9 +99,13 @@ impl RedisStreamClient {
         }
     }
 
-    async fn try_connect(redis_url: &str) -> Result<Self, String> {
+    async fn try_connect(redis_url: &str, block_ms: usize) -> Result<Self, String> {
         let client = redis::Client::open(redis_url).map_err(|e| e.to_string())?;
-        let redis = ConnectionManager::new(client)
+        let response_timeout = Duration::from_millis((block_ms as u64).saturating_mul(2));
+        let manager_config =
+            ConnectionManagerConfig::new().set_response_timeout(Some(response_timeout));
+
+        let redis = ConnectionManager::new_with_config(client, manager_config)
             .await
             .map_err(|e| e.to_string())?;
         let stream_client = Self { redis };

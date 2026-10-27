@@ -316,7 +316,7 @@
       "type": "timeseries",
       "gridPos": {
         "h": 8,
-        "w": 12,
+        "w": 6,
         "x": 0,
         "y": 6
       },
@@ -326,7 +326,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "1 - (avg by (vm) (rate(node_cpu_seconds_total{mode=\"idle\"}[1m])))",
+          "expr": "clamp_max(sum by (vm) (rate(container_cpu_usage_seconds_total{id=\"/\"}[1m])) / sum by (vm) (machine_cpu_cores), 1)",
           "legendFormat": "{{vm}}",
           "refId": "A",
           "interval": "5s"
@@ -395,6 +395,44 @@
       "interval": "5s"
     },
     {
+      "id": 15,
+      "title": "Ingest VM Container CPU (0 - 1.0)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 6,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "clamp_max(sum by (name) (rate(container_cpu_usage_seconds_total{vm=\"ingest\", name!=\"\"}[1m])) / scalar(sum(machine_cpu_cores{vm=\"ingest\"})), 1)",
+          "legendFormat": "{{name}}",
+          "refId": "A",
+          "interval": "5s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 15
+          }
+        },
+        "overrides": []
+      },
+      "interval": "5s"
+    },
+    {
       "id": 8,
       "title": "Ingest VM Memory (Used / Total)",
       "type": "gauge",
@@ -410,7 +448,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(node_memory_MemTotal_bytes{vm=\"ingest\"} - node_memory_MemAvailable_bytes{vm=\"ingest\"}) / (1024 * 1024 * 1024)",
+          "expr": "sum(container_memory_working_set_bytes{vm=\"ingest\", id=\"/\"}) / (1024 * 1024 * 1024)",
           "legendFormat": "Used",
           "refId": "A",
           "interval": "5s"
@@ -420,7 +458,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_memory_MemTotal_bytes{vm=\"ingest\"} / (1024 * 1024 * 1024)",
+          "expr": "sum(machine_memory_bytes{vm=\"ingest\"}) / (1024 * 1024 * 1024)",
           "legendFormat": "Total",
           "refId": "B",
           "interval": "5s"
@@ -498,7 +536,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(node_memory_MemTotal_bytes{vm=\"control\"} - node_memory_MemAvailable_bytes{vm=\"control\"}) / (1024 * 1024 * 1024)",
+          "expr": "sum(container_memory_working_set_bytes{vm=\"control\", id=\"/\"}) / (1024 * 1024 * 1024)",
           "legendFormat": "Used",
           "refId": "A",
           "interval": "5s"
@@ -508,7 +546,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_memory_MemTotal_bytes{vm=\"control\"} / (1024 * 1024 * 1024)",
+          "expr": "sum(machine_memory_bytes{vm=\"control\"}) / (1024 * 1024 * 1024)",
           "legendFormat": "Total",
           "refId": "B",
           "interval": "5s"
@@ -586,7 +624,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(node_memory_MemTotal_bytes{vm=\"worker\"} - node_memory_MemAvailable_bytes{vm=\"worker\"}) / (1024 * 1024 * 1024)",
+          "expr": "sum(container_memory_working_set_bytes{vm=\"worker\", id=\"/\"}) / (1024 * 1024 * 1024)",
           "legendFormat": "Used",
           "refId": "A",
           "interval": "5s"
@@ -596,7 +634,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "node_memory_MemTotal_bytes{vm=\"worker\"} / (1024 * 1024 * 1024)",
+          "expr": "sum(machine_memory_bytes{vm=\"worker\"}) / (1024 * 1024 * 1024)",
           "legendFormat": "Total",
           "refId": "B",
           "interval": "5s"

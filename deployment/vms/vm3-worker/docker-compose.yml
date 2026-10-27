@@ -15,13 +15,19 @@ services:
       WORKER_AUTOCLAIM_THRESHOLD_MS: "${WORKER_AUTOCLAIM_THRESHOLD_MS}"
       WORKER_ZSTD_LEVEL: "${WORKER_ZSTD_LEVEL}"
 
-  node-exporter:
-    image: ${NODE_EXPORTER_IMAGE}
-    container_name: observelol-node-exporter
+  cadvisor:
+    image: ${CADVISOR_IMAGE}
+    container_name: observelol-cadvisor
     restart: unless-stopped
-    network_mode: host
-    pid: host
+    privileged: true
+    ports:
+      - "8080:8080"
     command:
-      - "--path.rootfs=/host"
+      - "--housekeeping_interval=5s"
+      - "--disable_metrics=percpu,sched,tcp,udp,disk,diskIO,hugetlb,referenced_memory,cpu_topology,resctrl,process,advtcp,memory_numa"
     volumes:
-      - /:/host:ro,rslave
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
