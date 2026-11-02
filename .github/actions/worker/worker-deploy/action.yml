@@ -21,7 +21,7 @@ runs:
         mappings: |
           RUST_BUILDER=.container_images.rust_builder
           DEBIAN_RUNTIME=.container_images.debian_runtime
-          REGION=.GCP_REGION
+          REGION=.gcp_region
           VM_NAME=.infra_definitions.worker_vm.name
 
     - name: Load GCP OIDC configuration from config.yml

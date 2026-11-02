@@ -22,7 +22,7 @@ runs:
       uses: ./.github/actions/helpers/load-config
       with:
         mappings: |
-          REGION=.GCP_REGION
+          REGION=.gcp_region
           ZONE=.infra_definitions.zone
 
     - name: Render .env on runner

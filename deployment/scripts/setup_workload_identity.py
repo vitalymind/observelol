@@ -11,13 +11,13 @@ from common import load_config, run_cmd
     DEPLOY_SA_NAME,
 ) = load_config(
     [
-        "GCP_PROJECT_ID",
-        "GCP_PROJECT_NUMBER",
-        "GITHUB_OWNER",
-        "GITHUB_REPO",
-        "GCP_WORKLOAD_IDENTITY_POOL",
-        "GCP_WORKLOAD_IDENTITY_PROVIDER",
-        "GCP_DEPLOY_SA_NAME",
+        "gcp_project_id",
+        "gcp_project_number",
+        "github_owner",
+        "github_repo",
+        "gcp_workload_identity_pool",
+        "gcp_workload_identity_provider",
+        "gcp_deploy_sa_name",
     ]
 )
 

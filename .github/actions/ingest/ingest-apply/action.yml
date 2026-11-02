@@ -19,9 +19,9 @@ runs:
       uses: ./.github/actions/helpers/load-config
       with:
         mappings: |
-          REGION=.GCP_REGION
+          REGION=.gcp_region
           ZONE=.infra_definitions.zone
-          STATE_BUCKET=.GCP_STATE_BUCKET_NAME
+          STATE_BUCKET=.gcp_state_bucket_name
           INGEST_DOMAIN=.ingest_config.domain
 
     - name: Render .env on runner

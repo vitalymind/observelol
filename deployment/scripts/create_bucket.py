@@ -6,7 +6,7 @@ from common import run_cmd, load_config
     REGION,
     BUCKET_NAME,
 ) = load_config(
-    ["GCP_PROJECT_ID", "GCP_REGION", "GCP_STATE_BUCKET_NAME"],
+    ["gcp_project_id", "gcp_region", "gcp_state_bucket_name"],
 )
 
 print(f"--- Setting up OpenTofu State Bucket: gs://{BUCKET_NAME} ---")

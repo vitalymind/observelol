@@ -1,9 +1,9 @@
 # GitHub
-GITHUB_OWNER: vitalymind
-GITHUB_REPO: observelol
+github_owner: vitalymind
+github_repo: observelol
 
 # Google  cloud APIs
-GCP_REQUIRED_APIS:
+gcp_required_apis:
   - iam.googleapis.com
   - iamcredentials.googleapis.com
   - storage.googleapis.com
@@ -13,16 +13,16 @@ GCP_REQUIRED_APIS:
   - cloudresourcemanager.googleapis.com
 
 # Google cloud project
-GCP_PROJECT_ID: observelol
-GCP_PROJECT_NUMBER: 734759595251
-GCP_REGION: europe-north1
+gcp_project_id: observelol
+gcp_project_number: 734759595251
+gcp_region: europe-north1
 
 # Google envirinment
-GCP_STATE_BUCKET_NAME: observelol-service-bucket
-GCP_WORKLOAD_IDENTITY_POOL: github-pool
-GCP_WORKLOAD_IDENTITY_PROVIDER: github-provider
-GCP_DEPLOY_SA_NAME: github-deployer
-GCP_VM_SA_NAME: worker-service
+gcp_state_bucket_name: observelol-service-bucket
+gcp_workload_identity_pool: github-pool
+gcp_workload_identity_provider: github-provider
+gcp_deploy_sa_name: github-deployer
+gcp_vm_sa_name: worker-service
 
 # Infrastructure definitions
 infra_definitions:

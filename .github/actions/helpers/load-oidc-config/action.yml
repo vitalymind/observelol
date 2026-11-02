@@ -8,11 +8,11 @@ runs:
       uses: ./.github/actions/helpers/load-config
       with:
         mappings: |
-          PROJECT_ID=.GCP_PROJECT_ID
-          PROJECT_NUMBER=.GCP_PROJECT_NUMBER
-          POOL=.GCP_WORKLOAD_IDENTITY_POOL
-          PROVIDER=.GCP_WORKLOAD_IDENTITY_PROVIDER
-          DEPLOY_SA=.GCP_DEPLOY_SA_NAME
+          PROJECT_ID=.gcp_project_id
+          PROJECT_NUMBER=.gcp_project_number
+          POOL=.gcp_workload_identity_pool
+          PROVIDER=.gcp_workload_identity_provider
+          DEPLOY_SA=.gcp_deploy_sa_name
           OPENTOFU_VERSION=.ci_versions.opentofu
 
     - name: Assemble OIDC credentials and export to $GITHUB_ENV

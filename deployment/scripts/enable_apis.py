@@ -4,7 +4,7 @@ from common import load_config, run_cmd
 (
     PROJECT_ID,
     APIS,
-) = load_config(["GCP_PROJECT_ID", "GCP_REQUIRED_APIS"])
+) = load_config(["gcp_project_id", "gcp_required_apis"])
 
 print(f"--- Checking GCP APIs for project '{PROJECT_ID}' ---")
 enabled_proc = run_cmd(

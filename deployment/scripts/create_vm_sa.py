@@ -5,7 +5,7 @@ from common import load_config, run_cmd
 (
     PROJECT_ID,
     VM_SA_NAME,
-) = load_config(["GCP_PROJECT_ID", "GCP_VM_SA_NAME"])
+) = load_config(["gcp_project_id", "gcp_vm_sa_name"])
 
 print(f"--- Setting up VM Runtime Service Account ({VM_SA_NAME}) ---")
 vm_sa_email = f"{VM_SA_NAME}@{PROJECT_ID}.iam.gserviceaccount.com"

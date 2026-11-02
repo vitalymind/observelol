@@ -42,8 +42,8 @@ def main() -> None:
     with open(CONFIG_PATH, "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
-    project_id = config["GCP_PROJECT_ID"]
-    region = config["GCP_REGION"]
+    project_id = config["gcp_project_id"]
+    region = config["gcp_region"]
     zone_letter = config["infra_definitions"]["zone"]
     vm_name = config["infra_definitions"]["control_vm"]["name"]
     zone = f"{region}-{zone_letter}"

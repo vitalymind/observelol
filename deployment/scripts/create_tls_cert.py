@@ -10,7 +10,7 @@ from common import run_cmd, load_config
     BUCKET_NAME,
     INGEST_CONFIG,
 ) = load_config(
-    ["GCP_PROJECT_ID", "GCP_STATE_BUCKET_NAME", "ingest_config"],
+    ["gcp_project_id", "gcp_state_bucket_name", "ingest_config"],
 )
 
 DOMAIN = INGEST_CONFIG["domain"]

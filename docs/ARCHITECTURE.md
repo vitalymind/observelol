@@ -27,7 +27,7 @@ Contains DB and other files maintained by `control`
 ## React + Next.js app (VM2)
 Nodejs with Nextjs `control` running in container on VM2, its job is to process admin requests (react + next.js), keep track of replay files, periodically bundle replay files into CDN. `control` does not handle significant traffic and serves as control plane for administrator users. `control` writes to Redis when item/hero snapshot changes.
 
-## Workers (VM3)
+## Workers (VM2)
 Stateless containers running Rust apps with following functionlaity
 - Register with Redis (XREADGROUP) to wait for ready_games BLOCKING
 - Grab (lrange) all events for a game
@@ -40,7 +40,7 @@ Stateless containers running Rust apps with following functionlaity
 - Check if Redis have any abandoned games (XAUTOCLAIM)
 Workers might get empty list of events (duplicated end game event), in wich case it will be ignored and worker skips silently doin nothing.
 
-## OpenTelemetry + lgtm stack
+## OpenTelemetry + lgtm stack (VM3)
 otel-lgtm container (VM2) stream telemetry data, grafana is accessible via gcloud CLI (gCloud tunnel).
 Both VM1 and VM3, running prom/node-exporter container to report to hostmetrics on VM2
 
