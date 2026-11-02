@@ -59,7 +59,7 @@ runs:
       env:
         VM_TEST_NAME: "worker-test-${{ github.run_id }}-${{ github.run_attempt }}"
       run: |
-        sed "s/\${region}/${REGION}/g" deployment/vms/vm3-worker/cloud-init.yml > /tmp/rendered-worker-cloud-init.yml
+        sed -e "s/\${region}/${REGION}/g" -e "s/\${disk_name}/db-storage/g" deployment/vms/vm3-worker/cloud-init.yml > /tmp/rendered-worker-cloud-init.yml
 
         IMAGE_PROJECT="${IMAGE%%/*}"
         IMAGE_FAMILY="${IMAGE##*/}"
