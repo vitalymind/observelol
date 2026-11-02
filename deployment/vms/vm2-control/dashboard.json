@@ -824,6 +824,144 @@
         "x": 0,
         "y": 22
       },
+      "id": 104,
+      "title": "PostgreSQL & Worker VM Performance",
+      "type": "row"
+    },
+    {
+      "id": 16,
+      "title": "PostgreSQL Disk Write Throughput",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 0,
+        "y": 23
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "rate(container_fs_writes_bytes_total{vm=\"worker\", name=~\".*postgres.*\"}[15s]) or vector(0)",
+          "legendFormat": "Disk Write (SSD)",
+          "refId": "A",
+          "interval": "5s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 15
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "#EAB839",
+                "value": 6000000
+              },
+              {
+                "color": "#F2495C",
+                "value": 8000000
+              }
+            ]
+          }
+        }
+      },
+      "interval": "5s"
+    },
+    {
+      "id": 17,
+      "title": "PostgreSQL Memory (Working Set)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 23
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "container_memory_working_set_bytes{vm=\"worker\", name=~\".*postgres.*\"}",
+          "legendFormat": "PostgreSQL RAM",
+          "refId": "A",
+          "interval": "5s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 15
+          }
+        }
+      },
+      "interval": "5s"
+    },
+    {
+      "id": 18,
+      "title": "Worker VM Container CPU (0 - 1.0)",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 23
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "clamp_max(sum by (name) (rate(container_cpu_usage_seconds_total{vm=\"worker\", name!=\"\"}[15s])) / scalar(sum(machine_cpu_cores{vm=\"worker\"})), 1)",
+          "legendFormat": "{{name}}",
+          "refId": "A",
+          "interval": "5s"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 15
+          }
+        }
+      },
+      "interval": "5s"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
       "id": 103,
       "title": "Validation & System Errors",
       "type": "row"
@@ -836,7 +974,7 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 23
+        "y": 31
       },
       "targets": [
         {
@@ -898,7 +1036,7 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 23
+        "y": 31
       },
       "targets": [
         {

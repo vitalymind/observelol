@@ -47,7 +47,7 @@ services:
       - "8080:8080"
     command:
       - "--housekeeping_interval=5s"
-      - "--disable_metrics=percpu,sched,tcp,udp,disk,diskIO,hugetlb,referenced_memory,cpu_topology,resctrl,process,advtcp,memory_numa"
+      - "--disable_metrics=percpu,sched,tcp,udp,hugetlb,referenced_memory,cpu_topology,resctrl,process,advtcp,memory_numa"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
