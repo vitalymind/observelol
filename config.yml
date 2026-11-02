@@ -26,7 +26,7 @@ gcp_vm_sa_name: worker-service
 
 # Infrastructure definitions
 infra_definitions:
-  zone: a
+  zone: b
   subnet: "observelol-subnet"
   ingest_vm:
     name: "ingest"
