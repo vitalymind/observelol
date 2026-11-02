@@ -8,13 +8,13 @@ runs:
       uses: ./.github/actions/helpers/load-config
       with:
         mappings: |
-          REGION=.GCP_REGION
+          REGION=.gcp_region
           ZONE=.infra_definitions.zone
           IMAGE=.infra_definitions.ingest_vm.image
           MACHINE_TYPE=.infra_definitions.ingest_vm.type
           SUBNET=.infra_definitions.subnet
-          VM_SA=.GCP_VM_SA_NAME
-          PROJECT_ID=.GCP_PROJECT_ID
+          VM_SA=.gcp_vm_sa_name
+          PROJECT_ID=.gcp_project_id
           INGEST_DOMAIN=.ingest_config.domain
           RUST_BUILDER=.container_images.rust_builder
           DEBIAN_RUNTIME=.container_images.debian_runtime

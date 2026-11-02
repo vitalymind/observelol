@@ -399,8 +399,9 @@
     <!-- Top Header & Swarm Execution Controls -->
     <header>
       <div class="brand">
-        <h1>ObserveLoL Load Simulation Controller</h1>
+        <h1>Load sim</h1>
         <span id="swarmStateBadge" class="state-badge state-IDLE">IDLE</span>
+        <span id="workerBadge" class="state-badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.3);">-- WORKERS</span>
         <span id="statusToast" class="status-toast"></span>
       </div>
       <div class="header-actions">
@@ -416,6 +417,7 @@
       <div class="estimate-item">
         <div class="label">Estimated RPS</div>
         <div class="val" id="estRps">0.00</div>
+        <div class="hint" id="estRpsSub" style="color: #7dd3fc; font-family: var(--mono); font-size: 0.72rem;">0.00 / producer</div>
       </div>
       <div class="estimate-item">
         <div class="label">Games Per Minute (GPM)</div>
@@ -492,12 +494,12 @@
 
           <div class="form-row">
             <div class="form-group">
-              <label for="gameEventsTarget">
-                <span>Game Events Target (Max)</span>
-                <span class="hint" id="eventsRangeHint">Runtime: 95–100</span>
+              <label for="eventsPerMinute">
+                <span>Events / Min (per Producer)</span>
+                <span class="hint" id="eventsRateHint">1.00 RPS/prod</span>
               </label>
-              <input type="number" id="gameEventsTarget" min="0" max="50000" step="1" value="100" oninput="recalcEstimates()" />
-              <span class="hint">Kills, LevelUps & Items (95%–100% rolled per game)</span>
+              <input type="number" id="eventsPerMinute" min="0" max="50000" step="1" value="60" oninput="recalcEstimates()" />
+              <span class="hint" id="eventsRangeHint">Runtime: ~57–60 in-game events / game</span>
             </div>
 
             <div class="form-group">
@@ -579,6 +581,15 @@
               <div class="kpi-value" id="telCpu">0.0%</div>
               <div class="kpi-sub">RAM: <span id="telMem">0.0</span> MB</div>
             </div>
+          </div>
+
+          <!-- Worker Process Core Breakdown -->
+          <div id="workerBreakdownCard" style="display: none; background: var(--panel-alt); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; margin-top: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 0.76rem; text-transform: uppercase; color: var(--muted); letter-spacing: 0.04em;">Worker CPU Cores Breakdown</span>
+              <span id="workerCountSubtitle" class="hint" style="font-family: var(--mono); font-size: 0.74rem;"></span>
+            </div>
+            <div id="workerCoresGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px;"></div>
           </div>
 
           <!-- Live RPS & Failures Chart -->
@@ -805,7 +816,7 @@
       const initialDelayPct = Math.max(0, Math.min(100, Math.round(Number(document.getElementById("initialDelayPct").value) || 0)));
       const maxInitialDelaySec = minDurationSec * (initialDelayPct / 100.0);
       const avgDurationSec = (minDurationSec + maxDurationSec) / 2.0;
-      const eventsTarget = Math.max(0, Number(document.getElementById("gameEventsTarget").value) || 0);
+      const epm = Math.max(0, Number(document.getElementById("eventsPerMinute").value) || 0);
 
       document.getElementById("minDurationText").textContent = `${minDurationSec}s`;
       document.getElementById("maxDurationText").textContent = `${maxDurationSec}s`;
@@ -820,15 +831,29 @@
       document.getElementById("heroSelectBadge").textContent = `Hero Select: ${heroSelectSec}s`;
       document.getElementById("estHeroSelect").textContent = `${heroSelectSec}s`;
 
-      const minEvents = Math.floor(eventsTarget * 0.95);
-      document.getElementById("eventsRangeHint").textContent = `Runtime: ${minEvents}–${eventsTarget}`;
+      const inGameRpsPerProd = epm / 60.0;
+      const rateHintEl = document.getElementById("eventsRateHint");
+      if (rateHintEl) {
+        rateHintEl.textContent = `${inGameRpsPerProd.toFixed(2)} RPS/prod`;
+      }
+      const avgBaseEvents = inGameRpsPerProd * avgDurationSec;
+      const minEvents = Math.floor(avgBaseEvents * 0.95);
+      const maxEvents = Math.ceil(avgBaseEvents);
+      document.getElementById("eventsRangeHint").textContent = `Runtime: ~${minEvents}–${maxEvents} in-game events / game`;
+      const avgActionEvents = avgBaseEvents * 0.975;
 
-      const avgActionEvents = eventsTarget * 0.975;
+
+
       const avgTotalRequests = 14 + avgActionEvents; // 1 GET + 13 lifecycle POST + action events
       const estRps = (producers * avgTotalRequests) / avgDurationSec;
       const estGpm = (producers * 60) / avgDurationSec;
 
       document.getElementById("estRps").textContent = estRps.toFixed(2);
+      const estRpsSubEl = document.getElementById("estRpsSub");
+      if (estRpsSubEl) {
+        const estRpsPerProd = avgTotalRequests / avgDurationSec;
+        estRpsSubEl.textContent = `${estRpsPerProd.toFixed(2)} / producer`;
+      }
       document.getElementById("estGpm").textContent = estGpm.toFixed(2);
       document.getElementById("estAvgReqs").textContent = avgTotalRequests.toFixed(1);
       if (lastProducerStates.length === 0) {
@@ -849,7 +874,7 @@
         min_game_duration_sec: Number(document.getElementById("minGameDuration").value) || 45,
         max_game_duration_sec: Number(document.getElementById("maxGameDuration").value) || 75,
         initial_delay_pct: Math.max(0, Math.min(100, Math.round(Number(document.getElementById("initialDelayPct").value) || 0))),
-        game_events_target: Number(document.getElementById("gameEventsTarget").value) || 0,
+        events_per_minute: Number(document.getElementById("eventsPerMinute").value) || 0,
         min_items_per_hero: Number(document.getElementById("minItems").value) || 0,
         max_items_per_hero: Number(document.getElementById("maxItems").value) || 0,
         error_rates: errorRates
@@ -863,7 +888,7 @@
       document.getElementById("minGameDuration").value = cfg.min_game_duration_sec ?? 45;
       document.getElementById("maxGameDuration").value = cfg.max_game_duration_sec ?? 75;
       document.getElementById("initialDelayPct").value = cfg.initial_delay_pct ?? 100;
-      document.getElementById("gameEventsTarget").value = cfg.game_events_target ?? 100;
+      document.getElementById("eventsPerMinute").value = cfg.events_per_minute ?? cfg.game_events_target ?? 60;
       document.getElementById("minItems").value = cfg.min_items_per_hero ?? 0;
       document.getElementById("maxItems").value = cfg.max_items_per_hero ?? 6;
 
@@ -969,6 +994,45 @@
       if (t.process) {
         document.getElementById("telCpu").textContent = `${(t.process.cpu_percent ?? 0).toFixed(1)}%`;
         document.getElementById("telMem").textContent = (t.process.memory_mb ?? 0).toFixed(1);
+        const wBadge = document.getElementById("workerBadge");
+        if (wBadge && t.process.workers_count !== undefined) {
+          wBadge.textContent = `${t.process.workers_count} WORKER${t.process.workers_count === 1 ? '' : 'S'}`;
+        }
+
+        const wbCard = document.getElementById("workerBreakdownCard");
+        const wbGrid = document.getElementById("workerCoresGrid");
+        const wbSubtitle = document.getElementById("workerCountSubtitle");
+        if (wbCard && wbGrid) {
+          const workers = t.process.workers || [];
+          if (workers.length > 0) {
+            wbCard.style.display = "block";
+            if (wbSubtitle) {
+              wbSubtitle.textContent = `${workers.length} Cores Allocated`;
+            }
+            wbGrid.innerHTML = workers.map(w => {
+              const cpu = w.cpu_percent ?? 0;
+              const color = cpu < 60 ? "#22c55e" : cpu < 85 ? "#f59e0b" : "#ef4444";
+              const barWidth = Math.min(100, Math.max(2, Math.round(cpu)));
+              return `
+                <div style="background: rgba(11, 15, 25, 0.6); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; display: flex; flex-direction: column; gap: 4px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; font-family: var(--mono);">
+                    <span style="font-weight: 700; color: #f8fafc;">Core ${w.worker_index}</span>
+                    <span style="color: ${color}; font-weight: 700;">${cpu.toFixed(1)}%</span>
+                  </div>
+                  <div style="height: 4px; background: rgba(255, 255, 255, 0.08); border-radius: 2px; overflow: hidden;">
+                    <div style="width: ${barWidth}%; height: 100%; background: ${color}; transition: width 0.3s ease;"></div>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--muted); font-family: var(--mono);">
+                    <span>PID ${w.pid ?? '-'}</span>
+                    <span>${(w.memory_mb ?? 0).toFixed(1)} MB</span>
+                  </div>
+                </div>
+              `;
+            }).join("");
+          } else {
+            wbCard.style.display = "none";
+          }
+        }
       }
 
       // Endpoint table

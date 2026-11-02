@@ -5,7 +5,7 @@ from common import load_config, run_cmd
 (
     PROJECT_ID,
     DEPLOY_SA_NAME,
-) = load_config(["GCP_PROJECT_ID", "GCP_DEPLOY_SA_NAME"])
+) = load_config(["gcp_project_id", "gcp_deploy_sa_name"])
 
 print(f"--- Setting up GitHub Deployer Service Account ({DEPLOY_SA_NAME}) ---")
 deploy_sa_email = f"{DEPLOY_SA_NAME}@{PROJECT_ID}.iam.gserviceaccount.com"

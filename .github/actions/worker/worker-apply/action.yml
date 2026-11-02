@@ -22,8 +22,17 @@ runs:
       uses: ./.github/actions/helpers/load-config
       with:
         mappings: |
-          REGION=.GCP_REGION
+          REGION=.gcp_region
           ZONE=.infra_definitions.zone
+          PROJECT_ID=.gcp_project_id
+          POSTGRES_DB=.postgres_name
+          POSTGRES_USER=.postgres_user
+
+    - name: Fetch Database Password from Secret Manager
+      shell: bash
+      run: |
+        PG_PASS=$(gcloud secrets versions access latest --secret=postgres-password --project="${PROJECT_ID}" 2>/dev/null || echo "postgres")
+        echo "POSTGRES_PASSWORD=${PG_PASS}" >> "$GITHUB_ENV"
 
     - name: Render .env on runner
       uses: ./.github/actions/helpers/render-env
@@ -31,6 +40,10 @@ runs:
         output_file: deployment/vms/vm3-worker/.env
         mappings: |
           CADVISOR_IMAGE=.container_images.cadvisor
+          ATTACHED_DISK_NAME=.infra_definitions.worker_vm.attached_disk.name
+          POSTGRES_IMAGE=.container_images.postgres
+          POSTGRES_DB=.postgres_name
+          POSTGRES_USER=.postgres_user
           OTEL_GRPC_PORT=.ingest_config.otel_grpc_port
           OTEL_METRIC_EXPORT_INTERVAL=.ingest_config.otel_export_interval_ms
           WORKER_REPLICAS=.worker_config.replicas
@@ -44,6 +57,8 @@ runs:
           WORKER_IMAGE=${{ inputs.worker_image }}
           REDIS_HOST=${{ inputs.redis_host }}
           CONTROL_HOST=${{ inputs.control_host }}
+          POSTGRES_PASSWORD=${{ env.POSTGRES_PASSWORD }}
+          DATABASE_URL=postgres://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@postgres:5432/${{ env.POSTGRES_DB }}
 
     - name: Copy files to VM
       shell: bash
@@ -51,11 +66,16 @@ runs:
         gcloud compute ssh "${{ inputs.vm_name }}" \
           --zone="${REGION}-${ZONE}" \
           --tunnel-through-iap \
-          --command="mkdir -p /tmp/observelol"
+          --command="mkdir -p /tmp/observelol/migrations"
         shopt -s dotglob
         gcloud compute scp --recurse \
           deployment/vms/vm3-worker/* \
           "${{ inputs.vm_name }}:/tmp/observelol/" \
+          --zone="${REGION}-${ZONE}" \
+          --tunnel-through-iap
+        gcloud compute scp --recurse \
+          migrations/* \
+          "${{ inputs.vm_name }}:/tmp/observelol/migrations/" \
           --zone="${REGION}-${ZONE}" \
           --tunnel-through-iap
 

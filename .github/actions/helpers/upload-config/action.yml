@@ -8,7 +8,7 @@ runs:
       uses: ./.github/actions/helpers/load-config
       with:
         mappings: |
-          STATE_BUCKET=.GCP_STATE_BUCKET_NAME
+          STATE_BUCKET=.gcp_state_bucket_name
 
     - name: Load GCP OIDC configuration from config.yml
       uses: ./.github/actions/helpers/load-oidc-config

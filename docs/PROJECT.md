@@ -5,8 +5,8 @@ Pet project to learn full-stack, DevOps, IaC and simulated load. This applicatio
 
 - **Languages:** `TypeScript`, `Python`, `Rust`
 - **Front-end:** `React`
-- **Back-end:** `Next.JS`, `NodeJS`, `nginx`, `Rust`
-- **Database:** `PostgreSQL`, `Redis`
+- **Back-end:** `Next.JS`, `NodeJS`, `nginx`, `Rust`, `Redis`
+- **Database:** `PostgreSQL`
 - **Development:** `Vite`, `VS Code`, `Git`
 - **Test monitoring:** `Vitest`, `V8 coverage`, `OpenTelemetry`
 - **CI/CD:** `GitHub Actions`, `Docker`, `OpenTofu`

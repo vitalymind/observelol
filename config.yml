@@ -1,9 +1,9 @@
 # GitHub
-GITHUB_OWNER: vitalymind
-GITHUB_REPO: observelol
+github_owner: vitalymind
+github_repo: observelol
 
 # Google  cloud APIs
-GCP_REQUIRED_APIS:
+gcp_required_apis:
   - iam.googleapis.com
   - iamcredentials.googleapis.com
   - storage.googleapis.com
@@ -13,16 +13,16 @@ GCP_REQUIRED_APIS:
   - cloudresourcemanager.googleapis.com
 
 # Google cloud project
-GCP_PROJECT_ID: observelol
-GCP_PROJECT_NUMBER: 734759595251
-GCP_REGION: europe-north1
+gcp_project_id: observelol
+gcp_project_number: 734759595251
+gcp_region: europe-north1
 
 # Google envirinment
-GCP_STATE_BUCKET_NAME: observelol-service-bucket
-GCP_WORKLOAD_IDENTITY_POOL: github-pool
-GCP_WORKLOAD_IDENTITY_PROVIDER: github-provider
-GCP_DEPLOY_SA_NAME: github-deployer
-GCP_VM_SA_NAME: worker-service
+gcp_state_bucket_name: observelol-service-bucket
+gcp_workload_identity_pool: github-pool
+gcp_workload_identity_provider: github-provider
+gcp_deploy_sa_name: github-deployer
+gcp_vm_sa_name: worker-service
 
 # Infrastructure definitions
 infra_definitions:
@@ -42,6 +42,10 @@ infra_definitions:
     boot_disk:
       size: 10
       type: pd-balanced
+    attached_disk:
+      name: db-storage
+      size: 20
+      type: pd-ssd
   control_vm:
     name: "control"
     type: e2-medium
@@ -49,10 +53,6 @@ infra_definitions:
     boot_disk:
       size: 10
       type: pd-balanced
-    attached_disk:
-      name: db-storage
-      size: 20
-      type: pd-ssd
 
 # Tooling & CI Versions
 ci_versions:
@@ -63,6 +63,7 @@ ci_versions:
 container_images:
   redis: "redis:7-alpine"
   nginx: "nginx:1.30-alpine"
+  postgres: "postgres:17-alpine"
   cadvisor: "ghcr.io/google/cadvisor:v0.60.2"
   otel_lgtm: "grafana/otel-lgtm:0.38.1"
   rust_builder: "rust:1.99-slim-bookworm"
@@ -82,9 +83,13 @@ ingest_config:
 # Worker configuration
 worker_config:
   replicas: 5
-  db_mode: "drop" #postgres, drop
+  db_mode: "postgres" #postgres, drop
   redis_port: 6379
   batch_size: 16
   block_ms: 5000
   autoclaim_threshold_ms: 30000
   zstd_level: 3 #Replay compression
+
+# PostgreSQL config
+postgres_name: observelol
+postgres_user: postgres

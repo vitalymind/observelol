@@ -31,6 +31,19 @@ write_files:
       WantedBy=multi-user.target
 
 runcmd:
+  - |
+    mkdir -p "/mnt/disks/${disk_name}"
+    if [ -b "/dev/disk/by-id/google-${disk_name}" ]; then
+      blkid "/dev/disk/by-id/google-${disk_name}" || mkfs.ext4 -m 0 -E lazy_itable_init=0,lazy_journal_init=0,discard "/dev/disk/by-id/google-${disk_name}"
+      grep -qs "/mnt/disks/${disk_name}" /etc/fstab || echo "/dev/disk/by-id/google-${disk_name} /mnt/disks/${disk_name} ext4 discard,defaults,nofail 0 2" >> /etc/fstab
+      mount -a
+    else
+      mkdir -p "/var/lib/observelol/local_disk"
+      grep -qs "/mnt/disks/${disk_name}" /etc/fstab || echo "/var/lib/observelol/local_disk /mnt/disks/${disk_name} none bind,nofail 0 0" >> /etc/fstab
+      mount "/mnt/disks/${disk_name}" || true
+    fi
+    mkdir -p "/mnt/disks/${disk_name}/postgres"
+    chmod 777 "/mnt/disks/${disk_name}/postgres"
   - mkdir -p /var/lib/observelol
   - systemctl daemon-reload
   - systemctl enable --now observelol.service

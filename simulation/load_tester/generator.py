@@ -195,10 +195,16 @@ def generate_game_plan(
         )
 
     # 4. Phase 4: In-Game Action Events (Items, Kills, LevelUps)
-    max_target = config.game_events_target
-    if max_target > 0:
-        min_target = int(math.floor(max_target * 0.95))
-        actual_action_count = random.randint(min_target, max_target)
+    epm = getattr(config, "events_per_minute", None)
+    if epm is None:
+        epm = getattr(config, "game_events_target", 0)
+    if epm > 0:
+        game_duration_sec = total_duration_ms / 1000.0
+        base_target = (epm / 60.0) * game_duration_sec
+        min_target = int(math.floor(base_target * 0.95))
+        max_target = int(math.ceil(base_target))
+        actual_action_count = random.randint(min_target, max(min_target, max_target))
+
     else:
         actual_action_count = 0
 

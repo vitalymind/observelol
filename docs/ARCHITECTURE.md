@@ -13,19 +13,22 @@ Rust dispatcher is the public HTTPS entry point on port 443:
 - forwards all other traffic to the internal nginx container.
 
 ## Nginx (VM1)
-Sits behind the Rust dispatcher and handles non-ingest traffic destined for the VM2 `control` app (currently returning a static `ok` response).
+Sits behind the Rust dispatcher and handles non-ingest traffic destined for the VM3 `worker` app (currently returning a static `ok` response).
 
 ## Redis (VM1)
 Stores events (RPUSH) and manages Consumer Groups of workers.
 
-## PostgreSQL (VM2)
-Postgre is running in own container on VM2
+## OpenTelemetry + lgtm stack (VM2)
+otel-lgtm container stream telemetry data, grafana is accessible via gcloud CLI (gCloud tunnel).
 
-## Persistent detachable disc (Connected to VM2)
-Contains DB and other files maintained by `control`
+## PostgreSQL (VM3)
+PostgreSQL DB to store hero data and packed events
 
-## React + Next.js app (VM2)
-Nodejs with Nextjs `control` running in container on VM2, its job is to process admin requests (react + next.js), keep track of replay files, periodically bundle replay files into CDN. `control` does not handle significant traffic and serves as control plane for administrator users. `control` writes to Redis when item/hero snapshot changes.
+## Persistent detachable disc (Connected to VM3)
+Contains postresql db files
+
+## React + Next.js app (VM3)
+Nodejs with Nextjs running in container on VM3, its job is to process admin requests (react + next.js), keep track of replay files, periodically bundle replay files into CDN. React app writes to Redis when item/hero snapshot changes.
 
 ## Workers (VM3)
 Stateless containers running Rust apps with following functionlaity
@@ -39,10 +42,6 @@ Stateless containers running Rust apps with following functionlaity
 - Pipeline release events from Redis (`UNLINK`) and ack/clear game from `ready_games` (`XACK` + `XDEL`) together after the DB write.
 - Check if Redis have any abandoned games (XAUTOCLAIM)
 Workers might get empty list of events (duplicated end game event), in wich case it will be ignored and worker skips silently doin nothing.
-
-## OpenTelemetry + lgtm stack
-otel-lgtm container (VM2) stream telemetry data, grafana is accessible via gcloud CLI (gCloud tunnel).
-Both VM1 and VM3, running prom/node-exporter container to report to hostmetrics on VM2
 
 
 ## Backups

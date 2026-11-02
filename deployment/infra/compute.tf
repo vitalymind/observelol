@@ -1,9 +1,9 @@
-# Persistent detachable disk for VM2 (PostgreSQL data and control plane files)
-resource "google_compute_disk" "vm2_data" {
-  name = local.infra.control_vm.attached_disk.name
-  type = local.infra.control_vm.attached_disk.type
+# Persistent detachable disk for VM3 (PostgreSQL data and control plane files)
+resource "google_compute_disk" "vm3_data" {
+  name = local.infra.worker_vm.attached_disk.name
+  type = local.infra.worker_vm.attached_disk.type
   zone = local.zone
-  size = local.infra.control_vm.attached_disk.size
+  size = local.infra.worker_vm.attached_disk.size
 }
 
 # VM1: Ingestion (Nginx + Rust Dispatcher + Redis)
@@ -45,7 +45,7 @@ resource "google_compute_instance" "vm1_ingest" {
   allow_stopping_for_update = true
 }
 
-# VM2: Control & Data (PostgreSQL + Next.js Control + OTel-LGTM)
+# VM2: OpenTelemetry stack
 resource "google_compute_instance" "vm2_control" {
   name         = local.infra.control_vm.name
   machine_type = local.infra.control_vm.type
@@ -58,11 +58,6 @@ resource "google_compute_instance" "vm2_control" {
       size  = local.infra.control_vm.boot_disk.size
       type  = local.infra.control_vm.boot_disk.type
     }
-  }
-
-  attached_disk {
-    source      = google_compute_disk.vm2_data.id
-    device_name = local.infra.control_vm.attached_disk.name
   }
 
   network_interface {
@@ -85,7 +80,7 @@ resource "google_compute_instance" "vm2_control" {
   allow_stopping_for_update = true
 }
 
-# VM3: Stateless Rust Workers
+# VM3: Stateless Rust Workers + PostgreSQL + Next.js app
 resource "google_compute_instance" "vm3_worker" {
   name         = local.infra.worker_vm.name
   machine_type = local.infra.worker_vm.type
@@ -100,6 +95,11 @@ resource "google_compute_instance" "vm3_worker" {
     }
   }
 
+  attached_disk {
+    source      = google_compute_disk.vm3_data.id
+    device_name = local.infra.worker_vm.attached_disk.name
+  }
+
   network_interface {
     subnetwork = google_compute_subnetwork.subnet.id
     access_config {}
@@ -112,7 +112,8 @@ resource "google_compute_instance" "vm3_worker" {
 
   metadata = {
     user-data = templatefile("${path.module}/../vms/vm3-worker/cloud-init.yml", {
-      region = local.region
+      region    = local.region
+      disk_name = local.infra.worker_vm.attached_disk.name
     })
   }
 

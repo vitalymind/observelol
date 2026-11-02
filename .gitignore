@@ -9,5 +9,4 @@ __pycache__/
 certs/
 *.pem
 *.txt
-
-temp/
+.pytest_cache

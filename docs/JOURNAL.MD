@@ -61,4 +61,3 @@
 - Moved to medium VM for ingest
 - Improved grafana tunnel, multiplexed connection
 - Switched to cAdvisor from node_exporter to see into SPU use per container
-- 
